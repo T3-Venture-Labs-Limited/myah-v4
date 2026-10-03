@@ -1,11 +1,4 @@
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Provider } from 'jotai';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -116,6 +109,11 @@ const persistedCampaign = {
   replyRules: { blocknote: persistedBodies.replyRules, markdown: null },
 };
 
+jest.mock('@/myah/agent/components/MyahCampaignAgentSettings', () => ({
+  MyahCampaignAgentSettings: ({ campaignId }: { campaignId: string }) => (
+    <div data-testid="campaign-agent-settings" data-campaign-id={campaignId} />
+  ),
+}));
 jest.mock('@/ui/layout/contexts/LayoutRenderingContext', () => ({
   useLayoutRenderingContext: () => ({ isInSidePanel: mockIsInSidePanel }),
 }));
@@ -303,15 +301,14 @@ describe('MyahCampaignAgent', () => {
     });
 
     const region = screen.getByRole('region', {
-      name: 'Campaign AI guidance',
+      name: 'Campaign agent',
     });
     expect(region).toHaveFocus();
     expect(focus).toHaveBeenCalledTimes(1);
-
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Edit communicationGuidelines' }),
+    expect(screen.getByTestId('campaign-agent-settings')).toHaveAttribute(
+      'data-campaign-id',
+      'campaign-1',
     );
-    expect(focus).toHaveBeenCalledTimes(1);
     focus.mockRestore();
   });
 
@@ -324,250 +321,10 @@ describe('MyahCampaignAgent', () => {
       renderAgent(persistedCampaign, state);
 
       expect(
-        screen.getByRole('region', { name: 'Campaign AI guidance' }),
+        screen.getByRole('region', { name: 'Campaign agent' }),
       ).not.toHaveFocus();
     },
   );
-
-  it('distinguishes campaign-scoped facts from guidance without suggesting an agent runtime', () => {
-    renderAgent();
-
-    expect(
-      screen.getByText(
-        /Campaign brief and additional notes remain under Campaign/,
-      ),
-    ).toBeVisible();
-    expect(
-      screen.getByText(
-        /Guidance does not send replies or approve commercial terms/,
-      ),
-    ).toBeVisible();
-    expect(
-      screen.queryByRole('button', { name: /Test agent|Autonomous mode/i }),
-    ).not.toBeInTheDocument();
-  });
-
-  it('renders only the three guidance editors in metadata order', () => {
-    renderAgent();
-
-    expect(
-      screen.getByRole('heading', { name: 'Campaign agent' }),
-    ).toBeVisible();
-
-    const editors = screen.getAllByTestId('campaign-agent-editor');
-
-    expect(editors).toHaveLength(3);
-    expect(editors.map((editor) => editor.dataset.fieldName)).toEqual([
-      'communicationGuidelines',
-      'replyRules',
-      'escalationBoundaries',
-    ]);
-
-    for (const field of campaignFields.filter(({ name }) =>
-      [
-        'communicationGuidelines',
-        'replyRules',
-        'escalationBoundaries',
-      ].includes(name),
-    )) {
-      const group = screen.getByRole('group', { name: field.label });
-      const editor = within(group).getByTestId('campaign-agent-editor');
-
-      expect(within(group).getByText(field.description)).toBeVisible();
-      expect(editor).toHaveAttribute('data-editor-min-height', '80');
-      expect(editor).toHaveAttribute('data-object-name', 'campaign');
-      expect(editor).toHaveAttribute('data-placeholder', 'Enter instructions');
-      expect(editor).toHaveAttribute('data-record-id', 'campaign-1');
-      expect(editor).toHaveAttribute('data-should-persist', 'false');
-      expect(editor).toHaveAttribute('data-show-formatting-controls', 'false');
-    }
-
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
-  });
-
-  it('saves only dirty fields when Save is clicked', async () => {
-    renderAgent();
-
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Edit communicationGuidelines' }),
-    );
-
-    expect(mockUpdateOneRecord).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-
-    await waitFor(() => {
-      expect(mockUpdateOneRecord).toHaveBeenCalledWith({
-        idToUpdate: 'campaign-1',
-        objectNameSingular: 'campaign',
-        updateOneRecordInput: {
-          communicationGuidelines: {
-            blocknote: draftBody('communicationGuidelines'),
-            markdown: null,
-          },
-        },
-      });
-    });
-
-    expect(mockEnqueueSuccessSnackBar).toHaveBeenCalledWith({
-      message: 'Campaign Agent settings saved.',
-    });
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
-  });
-
-  it('syncs externally changed clean fields without clobbering a dirty draft', async () => {
-    const { store } = renderAgent();
-
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Edit communicationGuidelines' }),
-    );
-
-    await act(async () => {
-      store.set(recordStoreFamilyState.atomFamily('campaign-1'), {
-        ...persistedCampaign,
-        replyRules: {
-          blocknote: JSON.stringify([
-            { content: 'Externally updated guidelines', type: 'paragraph' },
-          ]),
-          markdown: null,
-        },
-      });
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-
-    await waitFor(() => {
-      expect(mockUpdateOneRecord).toHaveBeenCalledWith({
-        idToUpdate: 'campaign-1',
-        objectNameSingular: 'campaign',
-        updateOneRecordInput: {
-          communicationGuidelines: {
-            blocknote: draftBody('communicationGuidelines'),
-            markdown: null,
-          },
-        },
-      });
-    });
-  });
-
-  it('keeps dirty drafts when Save fails', async () => {
-    mockUpdateOneRecord.mockRejectedValueOnce(new Error('Write denied'));
-    renderAgent();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Edit replyRules' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-
-    await waitFor(() => {
-      expect(mockEnqueueErrorSnackBar).toHaveBeenCalledWith({
-        message: 'Campaign Agent settings could not be saved.',
-      });
-    });
-
-    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
-  });
-
-  it('preserves a dirty draft when an optimistic Save is rejected', async () => {
-    let rejectSave: ((error: Error) => void) | undefined;
-    const { store, view } = renderAgent();
-
-    mockUpdateOneRecord.mockImplementationOnce(() => {
-      store.set(recordStoreFamilyState.atomFamily('campaign-1'), {
-        ...persistedCampaign,
-        replyRules: {
-          blocknote: draftBody('replyRules'),
-          markdown: null,
-        },
-      });
-
-      return new Promise<void>((_resolve, reject) => {
-        rejectSave = reject;
-      });
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Edit replyRules' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    mockBlockerState = 'blocked';
-    view.rerender(
-      <MemoryRouter initialEntries={['/object/campaign/campaign-1']}>
-        <Provider store={store}>
-          <MyahCampaignAgent campaignId="campaign-1" title="Campaign agent" />
-        </Provider>
-      </MemoryRouter>,
-    );
-
-    const discardButton = await screen.findByRole('button', {
-      name: 'Discard changes',
-    });
-    expect(discardButton).toBeDisabled();
-    expect(mockProceed).not.toHaveBeenCalled();
-
-    await act(async () => {
-      store.set(
-        recordStoreFamilyState.atomFamily('campaign-1'),
-        persistedCampaign,
-      );
-      rejectSave?.(new Error('Write denied'));
-      await Promise.resolve();
-    });
-
-    await waitFor(() => {
-      expect(mockEnqueueErrorSnackBar).toHaveBeenCalled();
-      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
-    });
-    expect(mockProceed).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-
-    await waitFor(() => {
-      expect(mockUpdateOneRecord).toHaveBeenCalledTimes(2);
-      expect(mockUpdateOneRecord).toHaveBeenLastCalledWith({
-        idToUpdate: 'campaign-1',
-        objectNameSingular: 'campaign',
-        updateOneRecordInput: {
-          replyRules: {
-            blocknote: draftBody('replyRules'),
-            markdown: null,
-          },
-        },
-      });
-      expect(mockProceed).toHaveBeenCalled();
-    });
-    expect(mockCloseModal).toHaveBeenCalled();
-  });
-
-  it('blocks in-app navigation and browser unload while dirty', async () => {
-    const { store, view } = renderAgent();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Edit replyRules' }));
-
-    const beforeUnloadEvent = new Event('beforeunload', { cancelable: true });
-    window.dispatchEvent(beforeUnloadEvent);
-    expect(beforeUnloadEvent.defaultPrevented).toBe(true);
-
-    mockBlockerState = 'blocked';
-    view.rerender(
-      <MemoryRouter initialEntries={['/object/campaign/campaign-1']}>
-        <Provider store={store}>
-          <MyahCampaignAgent campaignId="campaign-1" title="Campaign agent" />
-        </Provider>
-      </MemoryRouter>,
-    );
-
-    await waitFor(() => {
-      expect(mockOpenModal).toHaveBeenCalled();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(mockReset).toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
-
-    await waitFor(() => {
-      expect(mockProceed).toHaveBeenCalled();
-      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
-    });
-  });
 
   it('keeps Campaign facts drafts on failed writes and blocks unsaved tab navigation', async () => {
     const store = resetJotaiStore();
@@ -763,28 +520,5 @@ describe('MyahCampaignAgent', () => {
     expect(
       screen.queryByTestId('campaign-rich-text-settings-surface'),
     ).not.toBeInTheDocument();
-  });
-
-  it.each([
-    [
-      'the record is loading',
-      () => (mockRecordLoading = true),
-      persistedCampaign,
-    ],
-    [
-      'Campaign metadata is incomplete',
-      () => (mockObjectMetadataItems = []),
-      persistedCampaign,
-    ],
-    ['the Campaign record has not hydrated', () => undefined, null],
-  ])('shows row placeholders while %s', (_description, arrange, record) => {
-    arrange();
-    renderAgent(record);
-
-    expect(
-      screen.getByTestId('campaign-rich-text-settings-surface'),
-    ).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
-    expect(screen.queryAllByTestId('campaign-agent-editor')).toHaveLength(0);
   });
 });

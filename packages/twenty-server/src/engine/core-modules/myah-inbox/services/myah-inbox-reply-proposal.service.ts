@@ -45,6 +45,11 @@ import {
 } from 'src/engine/metadata-modules/ai/ai-models/constants/ai-telemetry.const';
 import { AiModelRegistryService } from 'src/engine/metadata-modules/ai/ai-models/services/ai-model-registry.service';
 import { ManagedOpenRouterModelService } from 'src/engine/metadata-modules/ai/ai-models/services/managed-openrouter-model.service';
+import {
+  MyahAgentService,
+  type MyahAgentRecord,
+} from 'src/engine/core-modules/myah-agent/services/myah-agent.service';
+import { formatMyahAgentGuidance } from 'src/engine/core-modules/myah-agent/utils/format-myah-agent-guidance.util';
 
 export type MyahInboxReplyProposalContextInput = {
   authContext: UserWorkspaceAuthContext;
@@ -90,6 +95,7 @@ export class MyahInboxReplyProposalService {
     private readonly managedOpenRouterModelService: ManagedOpenRouterModelService,
     private readonly replyContexts: MyahInboxReplyContextService,
     private readonly approvals: ActionApprovalService,
+    private readonly myahAgentService: MyahAgentService,
   ) {}
   async generateContextReplyProposal(
     input: GenerateMyahInboxReplyProposalInput & {
@@ -251,7 +257,12 @@ export class MyahInboxReplyProposalService {
           : undefined,
       prompt: [
         `Operator request:\n${parsedInput.operatorInstructions}`,
-        this.formatReplyBriefingForPrompt(briefing),
+        this.formatReplyBriefingForPrompt(
+          briefing,
+          await this.myahAgentService.getAgentRecord(
+            input.authContext.workspace.id,
+          ),
+        ),
       ].join('\n\n'),
       output: Output.object({
         schema: MyahInboxReplyProposalModelOutputSchema,
@@ -308,6 +319,7 @@ export class MyahInboxReplyProposalService {
 
   private formatReplyBriefingForPrompt(
     briefing: MyahInboxReplyBriefing,
+    agent: MyahAgentRecord,
   ): string {
     const formatFields = (
       fields: Array<readonly [string, string | string[] | null]>,
@@ -334,21 +346,15 @@ export class MyahInboxReplyProposalService {
           ['Objective', briefing.campaign.objective],
           ['ICP goal', briefing.campaign.icpGoal],
           ['Campaign brief', briefing.campaign.agent.campaignBrief],
-          [
-            'Communication guidelines',
-            briefing.campaign.agent.communicationGuidelines,
-          ],
-          [
-            'Reply rules and approved answers',
-            briefing.campaign.agent.replyRules,
-          ],
-          [
-            'Escalation boundaries',
-            briefing.campaign.agent.escalationBoundaries,
-          ],
           ['Additional notes', briefing.campaign.agent.additionalNotes],
         ])
       : '';
+
+    const agentGuidance = formatMyahAgentGuidance(agent);
+
+    if (agentGuidance) {
+      sections.push(`Reference data — Brand agent guidance:\n${agentGuidance}`);
+    }
 
     if (campaignGuidance) {
       sections.push(`Reference data — Campaign guidance:\n${campaignGuidance}`);

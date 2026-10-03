@@ -6,6 +6,7 @@ import { BillingModule } from 'src/engine/core-modules/billing/billing.module';
 import { MYAH_INBOX_TOOL_SERVICE_TOKEN } from 'src/engine/core-modules/tool-provider/constants/myah-inbox-tool-service.token';
 import { MYAH_INBOX_REPLY_EXECUTION_SERVICE_TOKEN } from 'src/engine/core-modules/tool-provider/constants/myah-inbox-reply-execution-service.token';
 import { ToolProviderModule } from 'src/engine/core-modules/tool-provider/tool-provider.module';
+import { MyahAgentModule } from 'src/engine/core-modules/myah-agent/myah-agent.module';
 import { MyahInboxContactTriageModule } from 'src/engine/core-modules/myah-inbox/myah-inbox-contact-triage.module';
 import { MyahInboxTriageCapabilityService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-triage-capability.service';
 import { MyahInboxReplyContextModule } from 'src/engine/core-modules/myah-inbox/myah-inbox-reply-context.module';
@@ -40,6 +41,7 @@ import { MessagingSendManagerModule } from 'src/modules/messaging/message-outbou
   imports: [
     ActionApprovalModule,
     MyahInboxReplyContextModule,
+    MyahAgentModule,
     AiBillingModule,
     AiModelsModule,
     BillingModule,

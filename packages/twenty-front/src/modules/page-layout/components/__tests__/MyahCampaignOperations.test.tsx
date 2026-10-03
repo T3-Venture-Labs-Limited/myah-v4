@@ -43,6 +43,12 @@ jest.mock('@/page-layout/components/MyahCampaignEmailAccounts', () => ({
   ),
 }));
 
+jest.mock('@/myah/agent/components/MyahCampaignInstagramAccount', () => ({
+  MyahCampaignInstagramAccount: ({ campaignId }: { campaignId: string }) => (
+    <div data-testid="instagram-account" data-campaign-id={campaignId} />
+  ),
+}));
+
 jest.mock('@/page-layout/components/MyahCampaignRichTextSettings', () => ({
   MyahCampaignRichTextSettings: ({
     campaignId,
@@ -131,12 +137,13 @@ describe('MyahCampaignOperations', () => {
       'data-keep-editing',
       'Keep editing',
     );
-    expect(screen.getByText(/Email delivery settings/)).toBeVisible();
     expect(
-      screen.getByText(
-        /Instagram messages can be authored but Campaign Start sends email only/,
-      ),
+      screen.getByText(/Email and Instagram delivery settings/),
     ).toBeVisible();
+    expect(screen.getByTestId('instagram-account')).toHaveAttribute(
+      'data-campaign-id',
+      'campaign-1',
+    );
     expect(screen.getByTestId('email-accounts')).toHaveAttribute(
       'data-campaign-id',
       'campaign-1',

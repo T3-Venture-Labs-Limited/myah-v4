@@ -1,3 +1,4 @@
+import { CreateMyahAgentFastInstanceCommand } from './2-20-instance-command-fast-1791038783991-create-myah-agent';
 import { AddInstagramReactionEventFastInstanceCommand } from './2-20-instance-command-fast-1790914739533-add-instagram-reaction-event';
 import { InstallInstagramReactionWorkspaceCommand } from './2-20-workspace-command-1790914739534-install-instagram-reaction.command';
 import { RestoreInstagramV3ApprovalContextFastInstanceCommand } from './2-20-instance-command-fast-1790577600427-restore-instagram-v3-approval-context';
@@ -115,6 +116,7 @@ import { MyahCreatorSocialProfileModule } from 'src/modules/myah-creator-social-
     ResynchronizeMyahCampaignLayoutCommand,
     AddInstagramReactionEventFastInstanceCommand,
     InstallInstagramReactionWorkspaceCommand,
+    CreateMyahAgentFastInstanceCommand,
   ],
   exports: [
     VerifyInstagramSecurityCutoverWorkspaceCommand,

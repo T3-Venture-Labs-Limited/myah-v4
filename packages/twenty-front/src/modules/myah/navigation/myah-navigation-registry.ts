@@ -17,6 +17,7 @@ import {
   IconSearch,
   IconSend,
   IconSettingsAutomation,
+  IconSparkles,
   IconUsers,
   IconVersions,
   IconVideo,
@@ -31,6 +32,12 @@ const MyahCampaignMessagesPage = lazy(() =>
   import('@/myah/campaign-messages/components/MyahCampaignMessagesPage').then(
     (module) => ({ default: module.MyahCampaignMessagesPage }),
   ),
+);
+
+const MyahAgentPage = lazy(() =>
+  import('@/myah/agent/components/MyahAgentPage').then((module) => ({
+    default: module.MyahAgentPage,
+  })),
 );
 
 const CREATOR_OBJECT_UNIVERSAL_IDENTIFIER =
@@ -225,6 +232,18 @@ export const MYAH_NAVIGATION_ROUTES = [
     group: 'outreach',
     entryPath: '/myah/approvals',
     availability: 'deferred',
+  },
+  {
+    id: 'agent',
+    label: 'Agent',
+    Icon: IconSparkles,
+    group: 'brand-workspace',
+    entryPath: '/myah/agent',
+    availability: 'available',
+    destination: {
+      kind: 'myah-page',
+      Component: MyahAgentPage,
+    },
   },
   {
     id: 'connected-channels',
