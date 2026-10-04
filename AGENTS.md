@@ -55,12 +55,13 @@ Run commands from the repository root with the Node version in `.nvmrc` and the 
 ```bash
 scripts/myah-dev up           # start; the first run creates the schema and seeds a demo workspace
 scripts/myah-dev up --reset   # recreate the database and reseed
+scripts/myah-dev up --from-prod  # copy production (read-only), run the startup upgrade; sign in at app.localhost with a production email / myah-dev
 scripts/myah-dev status       # URLs, login and process state
 scripts/myah-dev logs api     # follow api, worker or front logs
 scripts/myah-dev down         # stop everything and delete this environment's data
 ```
 
-Login: `tim@apple.dev` / `tim@apple.dev`. Each process runs in its own memory-capped systemd scope (API 7G, worker 2G, front 6G; override with `MYAH_DEV_MEM_API/WORKER/FRONT`), so hitting a cap restarts nothing else. Instagram, Gmail and Microsoft providers are disabled and email goes to the logger driver, so nothing is sent. Optional extra server variables (for example AI provider keys) go in `~/.config/myah-dev/env`. Local data is disposable.
+Login: `tim@apple.dev` / `tim@apple.dev`. Use `--from-prod` to reproduce production bugs and to run pending upgrade steps against real data before deploying; it holds real customer data, sends stay off, and `down` deletes it. Each process runs in its own memory-capped systemd scope (API 7G, worker 2G, front 6G; override with `MYAH_DEV_MEM_API/WORKER/FRONT`), so hitting a cap restarts nothing else. Instagram, Gmail and Microsoft providers are disabled and email goes to the logger driver, so nothing is sent. Optional extra server variables (for example AI provider keys) go in `~/.config/myah-dev/env`. Local data is disposable.
 
 ## Tests and checks
 
