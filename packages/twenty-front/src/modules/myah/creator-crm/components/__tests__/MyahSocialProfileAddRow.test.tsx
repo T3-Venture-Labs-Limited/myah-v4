@@ -40,6 +40,10 @@ describe('MyahSocialProfileAddRow', () => {
       />,
     );
 
+    // Inside a record table, drag-selection must not swallow clicks here.
+    expect(
+      screen.getByRole('form', { name: 'Add social profile' }),
+    ).toHaveAttribute('data-select-disable', 'true');
     expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
     fireEvent.change(screen.getByLabelText('Handle'), {
       target: { value: '@myah_dev' },
