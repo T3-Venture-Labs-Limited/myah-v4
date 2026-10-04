@@ -1,3 +1,4 @@
+import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
 import { gql } from '@apollo/client';
 import { useApolloClient, useQuery } from '@apollo/client/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -314,6 +315,13 @@ export const MyahCampaignExecutionControls = ({
     lifecycle: CampaignRecord['lifecycleStatus'];
   } | null>(null);
   const apolloCoreClient = useApolloCoreClient();
+  // The Campaign header reads the shared record store; keep its badge current.
+  const publishLifecycle = (lifecycle: CampaignRecord['lifecycleStatus']) => {
+    const atom = recordStoreFamilyState.atomFamily(campaignId);
+    const record = store.get(atom);
+    if (record && lifecycle)
+      store.set(atom, { ...record, lifecycleStatus: lifecycle });
+  };
   const metadataClient = useApolloClient();
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular: 'campaign',
@@ -321,6 +329,9 @@ export const MyahCampaignExecutionControls = ({
   const { objectMetadataItem: campaignCreatorMetadata } = useObjectMetadataItem(
     { objectNameSingular: 'campaignCreator' },
   );
+  const { objectMetadataItem: socialProfileMetadata } = useObjectMetadataItem({
+    objectNameSingular: 'socialProfile',
+  });
   const { objectMetadataItem: creatorMetadata } = useObjectMetadataItem({
     objectNameSingular: 'creator',
   });
@@ -388,6 +399,7 @@ export const MyahCampaignExecutionControls = ({
   const activeNotice =
     operationNotice?.scope === scope ? operationNotice.message : null;
   const stopModalId = `stop-campaign-execution-${campaignId}`;
+  const startModalId = `start-campaign-execution-${campaignId}`;
   useEffect(() => {
     if (
       variant !== 'review' &&
@@ -444,6 +456,12 @@ export const MyahCampaignExecutionControls = ({
   });
   useListenToObjectRecordOperationBrowserEvent({
     objectMetadataItemId: creatorMetadata.id,
+    operationTypes: audienceRefreshOperationTypes,
+    onObjectRecordOperationBrowserEvent: refetchAudience,
+  });
+  // An added or removed Instagram handle changes who can be contacted.
+  useListenToObjectRecordOperationBrowserEvent({
+    objectMetadataItemId: socialProfileMetadata.id,
     operationTypes: audienceRefreshOperationTypes,
     onObjectRecordOperationBrowserEvent: refetchAudience,
   });
@@ -590,6 +608,7 @@ export const MyahCampaignExecutionControls = ({
       const freshLifecycle = await reload(origin);
       if (!isCurrent(origin)) return;
       setLastFreshStatus({ scope: origin, lifecycle: freshLifecycle });
+      publishLifecycle(freshLifecycle);
       setReconciliation(null);
       setOperationNotice(null);
       if (receipt === 'ACKNOWLEDGED') {
@@ -634,6 +653,7 @@ export const MyahCampaignExecutionControls = ({
       const freshLifecycle = await reload(origin);
       if (isCurrent(origin)) {
         setLastFreshStatus({ scope: origin, lifecycle: freshLifecycle });
+        publishLifecycle(freshLifecycle);
         setReconciliation(null);
         setOperationNotice(null);
       }
@@ -847,7 +867,10 @@ export const MyahCampaignExecutionControls = ({
       <Button
         disabled={!canStart}
         isLoading={pending === 'START'}
-        onClick={() => void start()}
+        // The header has no room for the audience review: confirm it first.
+        onClick={() =>
+          variant === 'header' ? openModal(startModalId) : void start()
+        }
         title="Start"
         type="button"
         variant="primary"
@@ -865,6 +888,46 @@ export const MyahCampaignExecutionControls = ({
     />
   );
 
+  const startConfirmation = (
+    <ConfirmationModal
+      confirmButtonText="Start Campaign"
+      confirmButtonAccent="brand"
+      loading={pending === 'START'}
+      modalInstanceId={startModalId}
+      onConfirmClick={() => {
+        closeModal(startModalId);
+        void start();
+      }}
+      subtitle={
+        audienceIsCurrent ? (
+          <>
+            <p>{`${audience.eligibleCount} will be contacted · ${audience.excludedCount} skipped.`}</p>
+            {audience.excludedCreators.length > 0 ? (
+              <ul aria-label="Skipped Campaign Creators">
+                {audience.excludedCreators.map((creator) => (
+                  <li key={creator.campaignCreatorId}>
+                    {`${creator.creatorName ?? 'Creator unavailable'}: ${creator.reasons
+                      .map((reason) =>
+                        reason === 'ACTIVE_IN_OTHER_CAMPAIGN' &&
+                        creator.activeCampaignName
+                          ? `active in ${creator.activeCampaignName}`
+                          : audienceReasonLabels[reason],
+                      )
+                      .join('; ')}`}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <p>Messages accepted by Instagram or email cannot be recalled.</p>
+          </>
+        ) : (
+          'The Campaign audience could not be loaded. Close this and reload before Start.'
+        )
+      }
+      title="Start this Campaign?"
+    />
+  );
+
   if (variant === 'header')
     return (
       <>
@@ -874,6 +937,7 @@ export const MyahCampaignExecutionControls = ({
             {controls}
             {recovery}
             {confirmation}
+            {startConfirmation}
           </>
         ) : (
           <span role="status">{blocker}</span>

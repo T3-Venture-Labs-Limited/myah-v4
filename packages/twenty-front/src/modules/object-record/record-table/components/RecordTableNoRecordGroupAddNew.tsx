@@ -1,3 +1,4 @@
+import { MyahSocialProfileAddRow } from '@/myah/creator-crm/components/MyahSocialProfileAddRow';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { hasAnySoftDeleteFilterOnViewComponentSelector } from '@/object-record/record-filter/states/hasAnySoftDeleteFilterOnView';
 import { useUpsertRecordsInStore } from '@/object-record/record-store/hooks/useUpsertRecordsInStore';
@@ -84,6 +85,19 @@ export const RecordTableNoRecordGroupAddNew = () => {
   ) {
     return null;
   }
+
+  if (objectMetadataItem.nameSingular === 'socialProfile')
+    return (
+      <MyahSocialProfileAddRow
+        objectMetadataItem={objectMetadataItem}
+        onCreate={async (input) => {
+          const createdRecord = await createNewIndexRecord(input);
+          if (!isDefined(createdRecord))
+            throw new Error('Social profile was not created');
+          upsertRecordsInStore({ partialRecords: [createdRecord] });
+        }}
+      />
+    );
 
   return (
     <RecordTableActionRow

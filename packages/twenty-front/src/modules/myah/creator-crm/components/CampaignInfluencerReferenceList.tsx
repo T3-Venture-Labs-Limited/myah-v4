@@ -1,4 +1,6 @@
 import { useQuery } from '@apollo/client/react';
+import { useListenToObjectRecordOperationBrowserEvent } from '@/browser-event/hooks/useListenToObjectRecordOperationBrowserEvent';
+import { type ObjectRecordOperation } from '@/object-record/types/ObjectRecordOperation';
 import {
   GET_MYAH_REPLY_AGENT_REVIEW,
   type MyahReplyAgentReviewData,
@@ -168,6 +170,16 @@ const StyledFeedback = styled.div`
 `;
 
 const NEED_REVIEW_ACTIONS = ['REVIEW_DRAFT', 'NEEDS_YOU', 'SEND_UNKNOWN'];
+const REVIEW_REFRESH_OPERATION_TYPES: ObjectRecordOperation['type'][] = [
+  'create-one',
+  'create-many',
+  'update-one',
+  'update-many',
+  'delete-one',
+  'delete-many',
+  'restore-one',
+  'restore-many',
+];
 const NEXT_ACTION_LABELS: Record<string, string> = {
   REVIEW_DRAFT: 'Review draft',
   NEEDS_YOU: 'Needs you',
@@ -216,6 +228,23 @@ export const CampaignInfluencerReferenceList = ({
     GET_MYAH_REPLY_AGENT_REVIEW,
     { variables: { input: { campaignId } }, fetchPolicy: 'cache-and-network' },
   );
+  // Memberships, handles and emails change what the agent review reports.
+  const refetchAgentReview = () => void agentReview.refetch();
+  useListenToObjectRecordOperationBrowserEvent({
+    objectMetadataItemId: campaignCreatorMetadataId,
+    operationTypes: REVIEW_REFRESH_OPERATION_TYPES,
+    onObjectRecordOperationBrowserEvent: refetchAgentReview,
+  });
+  useListenToObjectRecordOperationBrowserEvent({
+    objectMetadataItemId: creatorMetadataId ?? '',
+    operationTypes: REVIEW_REFRESH_OPERATION_TYPES,
+    onObjectRecordOperationBrowserEvent: refetchAgentReview,
+  });
+  useListenToObjectRecordOperationBrowserEvent({
+    objectMetadataItemId: socialProfileMetadataId ?? '',
+    operationTypes: REVIEW_REFRESH_OPERATION_TYPES,
+    onObjectRecordOperationBrowserEvent: refetchAgentReview,
+  });
   const reviewByMembership = new Map(
     (agentReview.data?.myahReplyAgentReview.nodes ?? []).map((node) => [
       node.campaignCreatorId,
