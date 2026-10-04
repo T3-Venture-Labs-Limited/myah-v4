@@ -2,12 +2,16 @@
 # One-command local Myah environment per worktree.
 #
 #   scripts/myah-dev up [--reset]   start Postgres/Redis containers, API, worker and frontend
+#   scripts/myah-dev up --from-prod copy production (read-only) instead of seeding, then run the
+#                                   startup upgrade production runs; sign in with a production
+#                                   email and password myah-dev (needs `railway login`)
 #   scripts/myah-dev down           stop everything and delete this environment's data
 #   scripts/myah-dev restart [api|worker|front]   restart one process (the worker does not hot-reload)
 #   scripts/myah-dev status         show URLs and process state
 #   scripts/myah-dev logs [api|worker|front]
 #
 # Each worktree gets its own containers, ports and .env files, so several can run at once.
+# Postgres matches production's major version (MYAH_DEV_PG_IMAGE overrides it).
 # Data is disposable: `up --reset` (or the first `up`) recreates the schema and seeds the
 # demo workspace. Login: tim@apple.dev / tim@apple.dev.
 #
@@ -27,6 +31,10 @@ SLOT=$(( $(printf '%s' "$NAME" | cksum | cut -d' ' -f1) % 200 ))
 BASE=$(( 42000 + SLOT * 10 ))
 PG_PORT=$BASE REDIS_PORT=$((BASE + 1)) API_PORT=$((BASE + 2)) FRONT_PORT=$((BASE + 3))
 PG="myah-dev-$NAME-pg"
+PG_IMAGE="${MYAH_DEV_PG_IMAGE:-postgres:18}"
+PROD_PROJECT="${MYAH_PROD_RAILWAY_PROJECT:-myah-v3}"
+PROD_DB_SERVICE="${MYAH_PROD_RAILWAY_DB_SERVICE:-Postgres-rWX3}"
+PROD_PASSWORD=myah-dev
 REDIS="myah-dev-$NAME-redis"
 
 # Node from .nvmrc (via mise when available) and the Yarn pinned in package.json (via corepack).
@@ -75,8 +83,11 @@ wait_http() { # url, seconds
 }
 
 write_env() {
+  # Keep one secret per environment: data encrypted with it (signing keys, tokens)
+  # must stay readable across restarts.
   local secret
-  secret=$(openssl rand -hex 24)
+  [ -s "$STATE/app-secret" ] || (umask 077 && openssl rand -hex 24 >"$STATE/app-secret")
+  secret=$(cat "$STATE/app-secret")
   {
     grep -v -E '^(PG_DATABASE_URL|REDIS_URL|APP_SECRET|NODE_PORT|SERVER_URL|FRONTEND_URL)=' \
       "$ROOT/packages/twenty-server/.env.example"
@@ -92,6 +103,11 @@ MESSAGING_PROVIDER_GMAIL_ENABLED=false
 MESSAGING_PROVIDER_MICROSOFT_ENABLED=false
 EMAIL_DRIVER=logger
 EOF
+    # A production copy has several workspaces: use production's subdomain routing
+    # (app.localhost, <workspace>.localhost) so each one is reachable.
+    if [ "${FROM_PROD:-}" = 1 ]; then
+      printf 'IS_MULTIWORKSPACE_ENABLED=true\nDEFAULT_SUBDOMAIN=app\n'
+    fi
     [ -f "$EXTRA_ENV" ] && cat "$EXTRA_ENV"
   } >"$ROOT/packages/twenty-server/.env"
   printf 'REACT_APP_SERVER_BASE_URL=http://localhost:%s\nREACT_APP_PORT=%s\n' \
@@ -102,19 +118,31 @@ up() {
   local reset=${1:-}
   mkdir -p "$STATE"
 
+  # A production copy must restore into production's Postgres major version.
+  if [ "$reset" = --from-prod ] && docker inspect "$PG" >/dev/null 2>&1 &&
+    [ "$(docker inspect -f '{{.Config.Image}}' "$PG")" != "$PG_IMAGE" ]; then
+    stop_bg api; stop_bg worker
+    docker rm -f "$PG" >/dev/null
+  fi
+
   if ! docker inspect "$PG" >/dev/null 2>&1; then
-    for p in $PG_PORT $REDIS_PORT $API_PORT $FRONT_PORT; do
-      port_busy "$p" && { echo "Port $p is in use; stop whatever uses it or rename the worktree." >&2; exit 1; }
-    done
+    port_busy "$PG_PORT" && { echo "Port $PG_PORT is in use; stop whatever uses it or rename the worktree." >&2; exit 1; }
     docker run -d --name "$PG" --label myah-dev="$NAME" -p "127.0.0.1:$PG_PORT:5432" \
-      -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=default postgres:16 >/dev/null
+      -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=default "$PG_IMAGE" >/dev/null
+    [ "$reset" = --from-prod ] || reset=--reset
+  fi
+  if ! docker inspect "$REDIS" >/dev/null 2>&1; then
+    port_busy "$REDIS_PORT" && { echo "Port $REDIS_PORT is in use; stop whatever uses it or rename the worktree." >&2; exit 1; }
     docker run -d --name "$REDIS" --label myah-dev="$NAME" -p "127.0.0.1:$REDIS_PORT:6379" \
       redis:7 --maxmemory-policy noeviction >/dev/null
-    reset=--reset
   fi
   docker start "$PG" "$REDIS" >/dev/null
   until docker exec "$PG" pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
 
+  FROM_PROD=
+  if [ "$reset" = --from-prod ] || { [ "$reset" != --reset ] && [ -f "$STATE/from-prod" ]; }; then
+    FROM_PROD=1
+  fi
   write_env
   [ -d "$ROOT/node_modules" ] || run_yarn install
 
@@ -125,6 +153,13 @@ up() {
       { echo "database:reset failed, see $STATE/reset.log" >&2; exit 1; }
   fi
 
+  if [ "$reset" = --from-prod ]; then
+    stop_bg api; stop_bg worker
+    restore_prod
+  elif [ "$reset" = --reset ]; then
+    rm -f "$STATE/from-prod"
+  fi
+
   start_bg api $(yarn_cmd) nx start twenty-server
   echo "Waiting for the API (first start builds the server)..."
   wait_http "http://localhost:$API_PORT/healthz" 600 ||
@@ -133,6 +168,41 @@ up() {
   start_bg front $(yarn_cmd) nx start twenty-front
   wait_http "http://localhost:$FRONT_PORT" 300 || echo "Frontend still starting, see $STATE/front.log" >&2
   status
+}
+
+# Production copy: a read-only dump restored into this environment's database, then the same
+# cache flush + upgrade production runs on startup, so pending upgrade steps run against real
+# data before they reach production. Sends stay off (see write_env), production secrets do not
+# decrypt with the local APP_SECRET, and every user's password becomes $PROD_PASSWORD.
+# The copy holds real customer data: it stays in this machine's container; `down` deletes it.
+restore_prod() {
+  command -v railway >/dev/null || { echo "Install the Railway CLI and run railway login." >&2; exit 1; }
+  local url
+  url=$(railway variables -p "$PROD_PROJECT" -e production -s "$PROD_DB_SERVICE" --json |
+    python3 -c 'import json,sys; print(json.load(sys.stdin)["DATABASE_PUBLIC_URL"])') ||
+    { echo "Could not read the production database URL from Railway." >&2; exit 1; }
+  echo "Copying production (read-only)..."
+  docker exec -e PGOPTIONS="-c default_transaction_read_only=on" "$PG" \
+    pg_dump "$url" -Fc --no-owner --no-acl -f /var/tmp/prod.dump
+  docker exec "$PG" psql -U postgres -q -c 'DROP DATABASE IF EXISTS "default" WITH (FORCE)' -c 'CREATE DATABASE "default"'
+  docker exec "$PG" pg_restore -U postgres -d default --no-owner --no-acl /var/tmp/prod.dump ||
+    { echo "Restore reported errors; check before trusting this copy." >&2; }
+  docker exec "$PG" rm -f /var/tmp/prod.dump
+  local hash
+  hash=$(cd "$ROOT/packages/twenty-server" && $(yarn_cmd) node -e \
+    "console.log(require('bcrypt').hashSync('$PROD_PASSWORD', 10))")
+  docker exec "$PG" psql -U postgres -d default -q -c \
+    "UPDATE core.\"user\" SET \"passwordHash\" = '$hash' WHERE \"deletedAt\" IS NULL" \
+    -c 'DELETE FROM core."signingKey"' # encrypted with production's secret; regenerated locally
+  docker exec "$REDIS" redis-cli flushall >/dev/null
+  echo "Running the production startup upgrade (build, cache flush, upgrade)..."
+  run_yarn nx build twenty-server >"$STATE/upgrade.log" 2>&1 &&
+    (cd "$ROOT/packages/twenty-server" && NODE_ENV=development $(yarn_cmd) node dist/command/command.js cache:flush &&
+      NODE_ENV=development $(yarn_cmd) node dist/command/command.js upgrade &&
+      NODE_ENV=development $(yarn_cmd) node dist/command/command.js cache:flush) >>"$STATE/upgrade.log" 2>&1 ||
+    { echo "Upgrade failed on the production copy, see $STATE/upgrade.log" >&2; exit 1; }
+  grep -E "Upgrade summary" "$STATE/upgrade.log" | tail -1
+  date -u +%FT%TZ >"$STATE/from-prod"
 }
 
 # The worker runs the API watcher's compiled output instead of a second watch compiler
@@ -160,7 +230,11 @@ down() {
 
 status() {
   echo "Environment: $NAME"
-  echo "  App:    http://localhost:$FRONT_PORT  (login tim@apple.dev / tim@apple.dev)"
+  if [ -f "$STATE/from-prod" ]; then
+    echo "  App:    http://app.localhost:$FRONT_PORT  (production copy from $(cat "$STATE/from-prod"); production email / $PROD_PASSWORD)"
+  else
+    echo "  App:    http://localhost:$FRONT_PORT  (login tim@apple.dev / tim@apple.dev)"
+  fi
   echo "  API:    http://localhost:$API_PORT"
   echo "  DB:     postgres://postgres:postgres@localhost:$PG_PORT/default"
   echo "  Redis:  redis://localhost:$REDIS_PORT"
@@ -175,5 +249,5 @@ case "${1:-}" in
   status) status ;;
   restart) restart "${2:-}" ;;
   logs) tail -n 100 -f "$STATE/${2:-api}.log" ;;
-  *) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+  *) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac

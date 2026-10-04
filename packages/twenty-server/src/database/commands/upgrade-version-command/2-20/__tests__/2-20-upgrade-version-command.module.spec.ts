@@ -538,6 +538,7 @@ describe('Instagram production upgrade provider compatibility', () => {
       '2.20.0_PrioritizeOutreachComposeWorkspaceCommand_1790553600427',
       '2.20.0_InstallInstagramReactionWorkspaceCommand_1790914739534',
       '2.20.0_RemoveLegacyCreatorSocialFieldsCommand_1791100000000',
+      '2.20.0_RepairCreatorSearchVectorCommand_1791100000001',
     ];
     expect(
       sequence.slice(-expectedTail.length).map(({ name }) => name),
@@ -568,6 +569,7 @@ describe('Instagram production upgrade provider compatibility', () => {
       '2.20.0_PrioritizeOutreachComposeWorkspaceCommand_1790553600427',
       '2.20.0_InstallInstagramReactionWorkspaceCommand_1790914739534',
       '2.20.0_RemoveLegacyCreatorSocialFieldsCommand_1791100000000',
+      '2.20.0_RepairCreatorSearchVectorCommand_1791100000001',
     ]);
     // An existing workspace already through Instagram adoption receives the
     // new layout command without moving the upgrade cursor backwards.
@@ -586,6 +588,7 @@ describe('Instagram production upgrade provider compatibility', () => {
       '2.20.0_PrioritizeOutreachComposeWorkspaceCommand_1790553600427',
       '2.20.0_InstallInstagramReactionWorkspaceCommand_1790914739534',
       '2.20.0_RemoveLegacyCreatorSocialFieldsCommand_1791100000000',
+      '2.20.0_RepairCreatorSearchVectorCommand_1791100000001',
     ]);
     expect(
       reader
@@ -601,6 +604,7 @@ describe('Instagram production upgrade provider compatibility', () => {
       '2.20.0_PrioritizeOutreachComposeWorkspaceCommand_1790553600427',
       '2.20.0_InstallInstagramReactionWorkspaceCommand_1790914739534',
       '2.20.0_RemoveLegacyCreatorSocialFieldsCommand_1791100000000',
+      '2.20.0_RepairCreatorSearchVectorCommand_1791100000001',
     ]);
     expect(
       getRegisteredWorkspaceCommandMetadata(

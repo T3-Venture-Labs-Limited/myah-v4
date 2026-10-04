@@ -29,6 +29,7 @@ import { WorkspaceIteratorModule } from 'src/database/commands/command-runners/w
 import { SynchronizeSourceControlledMyahMetadataService } from 'src/database/commands/upgrade-version-command/2-19/services/synchronize-source-controlled-myah-metadata.service';
 import { SynchronizeMyahStandardMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1784266302001-synchronize-myah-standard-metadata.command';
 import { SynchronizeMyahCampaignCreatorListSourcesCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1786602066315-synchronize-myah-campaign-creator-list-sources.command';
+import { RepairCreatorSearchVectorCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1791100000001-repair-creator-search-vector.command';
 import { RemoveLegacyCreatorSocialFieldsCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1791100000000-remove-legacy-creator-social-fields.command';
 import { RemoveMyahCampaignCreatorListsWidgetCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1787298665000-remove-myah-campaign-creator-lists-widget.command';
 import { SynchronizeMyahCampaignEmailSignatureMetadataCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1787721600000-synchronize-myah-campaign-email-signature-metadata.command';
@@ -83,6 +84,7 @@ import { MyahCreatorSocialProfileModule } from 'src/modules/myah-creator-social-
     SynchronizeMyahCampaignCreatorListSourcesCommand,
     RemoveMyahCampaignCreatorListsWidgetCommand,
     RemoveLegacyCreatorSocialFieldsCommand,
+    RepairCreatorSearchVectorCommand,
     SynchronizeMyahCampaignEmailSignatureMetadataCommand,
     SynchronizeMyahCreatorCrmSearchMetadataCommand,
     MigrateMyahCreatorImportMetadataCommand,
