@@ -73,7 +73,16 @@ jest.mock('@/ui/layout/modal/hooks/useModal', () => ({
   useModal: () => ({ openModal: jest.fn(), closeModal: jest.fn() }),
 }));
 jest.mock('@/ui/layout/modal/components/ConfirmationModal', () => ({
-  ConfirmationModal: () => null,
+  ConfirmationModal: ({
+    confirmButtonText,
+    onConfirmClick,
+  }: {
+    confirmButtonText: string;
+    onConfirmClick: () => void;
+  }) =>
+    confirmButtonText === 'Start Campaign' ? (
+      <button onClick={onConfirmClick}>{confirmButtonText}</button>
+    ) : null,
 }));
 jest.mock('@/page-layout/components/MyahCampaignEmailAccounts', () => ({
   MyahCampaignEmailAccounts: () => null,
@@ -248,5 +257,7 @@ it('mounts Operations review on the shared cache and refreshes readiness after p
   expect(screen.getAllByRole('button', { name: 'Start' })).toHaveLength(1);
 
   fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+  expect(startCalls).toBe(0);
+  fireEvent.click(screen.getByRole('button', { name: 'Start Campaign' }));
   await waitFor(() => expect(startCalls).toBe(1));
 });

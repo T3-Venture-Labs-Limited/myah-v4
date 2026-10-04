@@ -4,7 +4,22 @@ import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 
-const mockAgentReviewQuery = jest.fn(() => ({ data: undefined }));
+const mockAgentReviewRefetch = jest.fn();
+const mockAgentReviewQuery = jest.fn(() => ({
+  data: undefined,
+  refetch: mockAgentReviewRefetch,
+}));
+const mockReviewListeners: Array<{
+  objectMetadataItemId: string;
+  onObjectRecordOperationBrowserEvent: () => void;
+}> = [];
+jest.mock(
+  '@/browser-event/hooks/useListenToObjectRecordOperationBrowserEvent',
+  () => ({
+    useListenToObjectRecordOperationBrowserEvent: (listener: never) =>
+      mockReviewListeners.push(listener),
+  }),
+);
 jest.mock('@apollo/client/react', () => ({
   ...jest.requireActual('@apollo/client/react'),
   useQuery: (...args: unknown[]) => mockAgentReviewQuery(...(args as [])),
@@ -142,6 +157,7 @@ it('shows the agent next action and filters to influencers that need review', ()
         ],
       },
     },
+    refetch: mockAgentReviewRefetch,
   } as never);
   setup({
     records: [
@@ -161,7 +177,21 @@ it('shows the agent next action and filters to influencers that need review', ()
   fireEvent.click(screen.getByRole('button', { name: 'Need review 1' }));
   expect(screen.getByRole('button', { name: /Ava Rivera/ })).toBeVisible();
   expect(screen.queryByRole('button', { name: /Luca Romano/ })).toBeNull();
-  mockAgentReviewQuery.mockReturnValue({ data: undefined });
+  mockAgentReviewQuery.mockReturnValue({
+    data: undefined,
+    refetch: mockAgentReviewRefetch,
+  });
+});
+
+it('refreshes the agent review when memberships or social profiles change', () => {
+  setup();
+  for (const id of ['membership-metadata', 'profile-metadata'])
+    mockReviewListeners
+      .filter((listener) => listener.objectMetadataItemId === id)
+      .at(-1)
+      ?.onObjectRecordOperationBrowserEvent();
+
+  expect(mockAgentReviewRefetch).toHaveBeenCalledTimes(2);
 });
 
 it('renders only permission-scoped Campaign rows with recorded metadata stage, search, and load more', () => {

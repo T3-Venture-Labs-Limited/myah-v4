@@ -329,6 +329,7 @@ it('shows historical acknowledgment without claiming ACTIVE in the header when s
   );
 
   fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start Campaign' }));
   await waitFor(() =>
     expect(screen.getByRole('status')).toHaveTextContent(
       'Earlier Start attempt acknowledged, but current Campaign status could not be refreshed. Reload before taking another action.',
@@ -351,6 +352,7 @@ it('resets a failed Start retry when the record header navigates to another Camp
   );
 
   fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start Campaign' }));
   await waitFor(() => expect(metadataMutate).toHaveBeenCalledTimes(1));
 
   lifecycleStatus = 'ACTIVE';
@@ -625,6 +627,47 @@ it('refetches the audience after Creator or Campaign Creator record changes', ()
   for (const [{ onObjectRecordOperationBrowserEvent }] of activeListeners)
     onObjectRecordOperationBrowserEvent();
   expect(refetchAudience).toHaveBeenCalledTimes(2);
+});
+
+it('asks for confirmation in the header and names who will be skipped before Start', async () => {
+  audienceData = {
+    campaignOutreachAudienceReview: {
+      state: 'LOADED',
+      campaignId: 'campaign',
+      eligibleCount: 1,
+      eligibleCreators: [
+        {
+          campaignCreatorId: 'membership-1',
+          creatorId: 'creator-1',
+          creatorName: 'Poppy Hartwell',
+        },
+      ],
+      excludedCount: 1,
+      excludedCreators: [
+        {
+          campaignCreatorId: 'membership-2',
+          creatorId: 'creator-2',
+          creatorName: 'Myah Insta',
+          reasons: ['NO_USABLE_CHANNEL'],
+        },
+      ],
+    },
+  };
+  render(
+    <MyahCampaignExecutionControls campaignId="campaign" variant="header" />,
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+  expect(metadataMutate).not.toHaveBeenCalled();
+  expect(screen.getByText('Start this Campaign?')).toBeVisible();
+  expect(screen.getByText('1 will be contacted · 1 skipped.')).toBeVisible();
+  expect(
+    screen.getByText(
+      'Myah Insta: No Instagram handle or usable email for this sequence',
+    ),
+  ).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Start Campaign' }));
+  await waitFor(() => expect(metadataMutate).toHaveBeenCalledTimes(1));
 });
 
 it('shows eligible and excluded Creator names with actionable reasons', () => {
@@ -926,6 +969,7 @@ it.each(['campaign', 'sequence', 'audience', 'sender'] as const)(
       <MyahCampaignExecutionControls campaignId="campaign" variant="header" />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start Campaign' }));
     await waitFor(() =>
       expect(screen.getByRole('status')).toHaveTextContent(
         'Campaign Start confirmed, but status could not be refreshed',
@@ -973,6 +1017,7 @@ it('does not clear a confirmed receipt when a subordinate fresh read is missing'
     <MyahCampaignExecutionControls campaignId="campaign" variant="header" />,
   );
   fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start Campaign' }));
   await waitFor(() =>
     expect(screen.getByRole('status')).toHaveTextContent(
       'Campaign Start confirmed, but status could not be refreshed',
@@ -1037,6 +1082,7 @@ it('uses historical ACK only as an older receipt, not a current ACTIVE state', a
     <MyahCampaignExecutionControls campaignId="campaign" variant="header" />,
   );
   fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start Campaign' }));
   await waitFor(() =>
     expect(mockEnqueueSuccessSnackBar).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1088,6 +1134,7 @@ it('ignores an old Campaign receipt after navigation while its mutation is pendi
     <MyahCampaignExecutionControls campaignId="campaign-a" variant="header" />,
   );
   fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start Campaign' }));
   expect(metadataMutate).toHaveBeenCalledTimes(1);
   rerender(
     <MyahCampaignExecutionControls campaignId="campaign-b" variant="header" />,
@@ -1214,6 +1261,7 @@ it.each(['lost-response', 'canonical'])(
     try {
       const { rerender } = render(control());
       fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Start Campaign' }));
       expect(metadataMutate).toHaveBeenCalledTimes(1);
       await act(async () => {
         store.set(tokenPairState.atom, pair('renewed'));
@@ -1235,6 +1283,7 @@ it.each(['lost-response', 'canonical'])(
           expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
         );
         fireEvent.click(screen.getByRole('button', { name: 'Start' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Start Campaign' }));
         await waitFor(() => expect(metadataMutate).toHaveBeenCalledTimes(2));
         expect(
           metadataMutate.mock.calls[1][0].variables.input.startIdempotencyKey,
