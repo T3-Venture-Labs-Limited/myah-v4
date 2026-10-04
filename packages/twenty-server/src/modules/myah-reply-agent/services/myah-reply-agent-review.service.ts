@@ -37,8 +37,6 @@ type Run = {
   handled: boolean;
 };
 
-const REVIEW_STATUSES = ['DRAFTED', 'HANDED_OFF', 'SEND_UNKNOWN'];
-
 // What the agent left for people to do, per Campaign influencer (MYAH-445).
 // Membership and conversation access use the caller's permissions; run rows
 // carry only agent outcomes, not message content.
@@ -89,7 +87,8 @@ export class MyahReplyAgentReviewService {
       if (run && !run.handled) {
         if (run.status === 'DRAFTED')
           return { ...base, nextAction: 'REVIEW_DRAFT', reason: run.reason };
-        if (run.status === 'HANDED_OFF')
+        // A failed run left nothing to send: a person has to act.
+        if (run.status === 'HANDED_OFF' || run.status === 'FAILED')
           return { ...base, nextAction: 'NEEDS_YOU', reason: run.reason };
         if (run.status === 'SEND_UNKNOWN')
           return { ...base, nextAction: 'SEND_UNKNOWN', reason: run.reason };
@@ -191,7 +190,10 @@ export class MyahReplyAgentReviewService {
         ORDER BY r."createdAt" DESC LIMIT 1`,
       [workspaceId, input.conversationRecordId],
     )) as Row[];
-    if (!row || !['DRAFTED', 'HANDED_OFF'].includes(String(row.status)))
+    if (
+      !row ||
+      !['DRAFTED', 'HANDED_OFF', 'FAILED'].includes(String(row.status))
+    )
       return null;
     const current = await this.currentDraftBody(
       workspaceId,
@@ -210,7 +212,7 @@ export class MyahReplyAgentReviewService {
         ? await this.campaignName(workspaceId, row.campaignId)
         : null;
     return {
-      kind: row.status === 'HANDED_OFF' ? 'NEEDS_YOU' : 'DRAFTED',
+      kind: row.status === 'DRAFTED' ? 'DRAFTED' : 'NEEDS_YOU',
       reason: typeof row.reason === 'string' ? row.reason : null,
       campaignName,
     };
