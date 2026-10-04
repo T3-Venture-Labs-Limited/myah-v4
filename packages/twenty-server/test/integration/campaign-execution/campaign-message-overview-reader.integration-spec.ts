@@ -581,6 +581,20 @@ describe('Campaign message overview PostgreSQL reader', () => {
       '2026-11-03T00:00:00Z',
     );
 
+    // Other suites in the shard can leave this workspace's forecast head behind
+    // (any progression invalidates the forecast); start from an empty scope.
+    await global.testDataSource.query(
+      `UPDATE core."campaignForecastHead" SET "currentGenerationId"=NULL WHERE "workspaceId"=$1 AND "scopeKey"=$2`,
+      [workspaceId, `workspace:${workspaceId}`],
+    );
+    await global.testDataSource.query(
+      `DELETE FROM core."campaignForecastGeneration" WHERE "workspaceId"=$1 AND "scopeKey"=$2`,
+      [workspaceId, `workspace:${workspaceId}`],
+    );
+    await global.testDataSource.query(
+      `DELETE FROM core."campaignForecastHead" WHERE "workspaceId"=$1 AND "scopeKey"=$2`,
+      [workspaceId, `workspace:${workspaceId}`],
+    );
     await global.testDataSource.query(
       `INSERT INTO core."campaignForecastHead" ("workspaceId","scopeKey","inputRevision") VALUES ($1,$2,2)`,
       [workspaceId, `workspace:${workspaceId}`],

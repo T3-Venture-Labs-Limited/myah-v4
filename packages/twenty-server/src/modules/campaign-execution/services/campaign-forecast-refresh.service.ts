@@ -1,3 +1,4 @@
+import { forecastInstagramSteps } from 'src/modules/campaign-execution/utils/forecast-instagram-steps.util';
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { type EntityManager } from 'typeorm';
@@ -114,6 +115,92 @@ export class CampaignForecastRefreshService {
       }
     }
     if (firstError !== undefined) throw firstError;
+  }
+
+  // Instagram steps: the Campaign's Instagram account (the selected one, or the
+  // only connected one) paced by its rolling cold limits (MYAH-445).
+  private async forecastInstagram(
+    queryRunner: NonNullable<EntityManager['queryRunner']>,
+    workspaceId: string,
+    occurrences: Awaited<
+      ReturnType<CampaignForecastCandidateReaderService['readPage']>
+    >['items'],
+    generatedAt: Date,
+    horizonEndsAt: Date,
+  ) {
+    if (occurrences.length === 0) return [];
+    const campaignIds = [
+      ...new Set(occurrences.map(({ campaignId }) => campaignId)),
+    ];
+    const accounts = rows<{ campaignId: string; accountId: string | null }>(
+      await queryRunner.query(
+        `SELECT campaign.id AS "campaignId",
+                COALESCE(
+                  (SELECT b."workspaceInstagramAccountRecordId" FROM core."unipileInstagramAccountBinding" b
+                    WHERE b."workspaceId"=$1 AND b.status='ACTIVE' AND b."deactivatedAt" IS NULL
+                      AND b."workspaceInstagramAccountRecordId"=setting."instagramAccountId"),
+                  (SELECT min(b."workspaceInstagramAccountRecordId"::text)::uuid FROM core."unipileInstagramAccountBinding" b
+                    WHERE b."workspaceId"=$1 AND b.status='ACTIVE' AND b."deactivatedAt" IS NULL
+                      AND setting."instagramAccountId" IS NULL
+                   HAVING count(*)=1)
+                ) AS "accountId"
+           FROM unnest($2::uuid[]) campaign(id)
+           LEFT JOIN core."myahCampaignAgentSetting" setting
+             ON setting."workspaceId"=$1 AND setting."campaignId"=campaign.id`,
+        [workspaceId, campaignIds],
+      ),
+    );
+    const accountByCampaign = new Map(
+      accounts.map(({ campaignId, accountId }) => [campaignId, accountId]),
+    );
+    const accountIds = [
+      ...new Set(
+        accounts.flatMap(({ accountId }) => (accountId ? [accountId] : [])),
+      ),
+    ];
+    const recent = accountIds.length
+      ? rows<{ accountId: string; reservedAt: Date }>(
+          await queryRunner.query(
+            `SELECT "instagramAccountRecordId" AS "accountId","reservedAt"
+               FROM core."instagramActionReservation"
+              WHERE "workspaceId"=$1 AND "instagramAccountRecordId"=ANY($2::uuid[])
+                AND "releasedAt" IS NULL AND "isCold"
+                AND "reservedAt" > $3::timestamptz - INTERVAL '24 hours'`,
+            [workspaceId, accountIds, generatedAt],
+          ),
+        )
+      : [];
+    const recentColdSendsByAccount = new Map<string, Date[]>();
+    for (const { accountId, reservedAt } of recent)
+      recentColdSendsByAccount.set(accountId, [
+        ...(recentColdSendsByAccount.get(accountId) ?? []),
+        new Date(reservedAt),
+      ]);
+    const estimates = forecastInstagramSteps({
+      generatedAt,
+      recentColdSendsByAccount,
+      steps: occurrences.map((occurrence) => ({
+        occurrenceId: occurrence.occurrenceId,
+        dueAt: occurrence.dueAt,
+        instagramAccountId:
+          accountByCampaign.get(occurrence.campaignId) ?? null,
+        window: occurrence.window,
+      })),
+    });
+    return occurrences.flatMap((occurrence) => {
+      const estimatedSendAt = estimates.get(occurrence.occurrenceId);
+      return estimatedSendAt &&
+        estimatedSendAt.getTime() < horizonEndsAt.getTime()
+        ? [
+            {
+              campaignId: occurrence.campaignId,
+              connectedAccountId: null,
+              estimatedSendAt,
+              occurrenceId: occurrence.occurrenceId,
+            },
+          ]
+        : [];
+    });
   }
 
   private async refresh(
@@ -373,6 +460,15 @@ export class CampaignForecastRefreshService {
       maxItems: MAX_CANDIDATES,
       occurrences: forecastOccurrences,
     });
+    const instagramEntries = await this.forecastInstagram(
+      queryRunner,
+      head.workspaceId,
+      occurrences.filter(({ occurrenceId }) =>
+        instagramOccurrenceIds.has(occurrenceId),
+      ),
+      generatedAt,
+      horizonEndsAt,
+    );
 
     return {
       complete:
@@ -380,7 +476,7 @@ export class CampaignForecastRefreshService {
         conflictingAccountIds.size === 0 &&
         !hasUnforecastableThreadReply &&
         result.coverage.complete,
-      entries: result.projections,
+      entries: [...result.projections, ...instagramEntries],
       evaluatedCount: result.coverage.evaluatedCount,
       expectedInputRevision: Number(head.inputRevision),
       generatedAt: result.generatedAt,

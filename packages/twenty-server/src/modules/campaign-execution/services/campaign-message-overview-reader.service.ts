@@ -741,7 +741,8 @@ export class CampaignMessageOverviewReaderService {
               sequenceStep: fact.authoredMessageIndex + 1,
               platform: 'Instagram',
               status,
-              estimatedSendAt: null,
+              estimatedSendAt:
+                status === 'SCHEDULED' ? iso(fact.estimatedSendAt) : null,
               sentAt: status === 'SENT' ? iso(fact.receiptAt) : null,
               eligibleAfter:
                 status === 'SENT' || status === 'CANCELLED'

@@ -964,9 +964,7 @@ export class CampaignProgressionService implements CampaignProgressionPort {
   > {
     // Email-only sequences keep the original rule: the next step is next;
     // the claim checks the address. Channels matter only in mixed sequences.
-    const mixed = plan.nodes
-      .slice(fromIndex + 1)
-      .some((node) => node.channel !== 'EMAIL');
+    const mixed = plan.nodes.some((node) => node.channel !== 'EMAIL');
     let hasEmail = true;
     let hasInstagram = false;
     if (mixed) {
