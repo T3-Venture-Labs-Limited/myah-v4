@@ -1,4 +1,5 @@
 import {
+  describeMyahReplyAgentFailure,
   buildMyahReplyAgentPrompt,
   buildMyahReplyAgentSystemPrompt,
   type MyahReplyAgentDecision,
@@ -491,6 +492,33 @@ describe('reply agent prompt', () => {
     expect(prompt).toContain('Summer SPF drop: POSTED');
     expect(prompt.indexOf('Email Brand')).toBeLessThan(
       prompt.indexOf('Instagram Creator'),
+    );
+  });
+});
+
+describe('describeMyahReplyAgentFailure', () => {
+  it('tells a person why the agent did not draft', () => {
+    expect(
+      describeMyahReplyAgentFailure(
+        new Error(
+          'Insufficient prepaid balance for this managed-provider operation',
+        ),
+      ),
+    ).toBe(
+      'AI credit is used up. Add credit, then Regenerate, or reply yourself.',
+    );
+    expect(
+      describeMyahReplyAgentFailure(new Error('Credits exhausted')),
+    ).toMatch(/^AI credit is used up/);
+    expect(
+      describeMyahReplyAgentFailure(
+        new Error(
+          'No AI models are available. Configure at least one AI provider.',
+        ),
+      ),
+    ).toBe('No AI model is set up for this workspace. Reply yourself.');
+    expect(describeMyahReplyAgentFailure(new Error('socket hang up'))).toBe(
+      'The agent could not prepare a reply. Regenerate or reply yourself.',
     );
   });
 });

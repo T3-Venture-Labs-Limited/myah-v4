@@ -41,6 +41,7 @@ describe('MyahReplyAgentReviewService', () => {
       membership(5, 'READY'),
       membership(6, 'READY'),
       membership(7, 'READY'),
+      membership(8, 'NEGOTIATING'),
     ];
     const query = jest.fn(async (sql: string) => {
       if (sql.includes('core."myahAgentRun"'))
@@ -49,6 +50,7 @@ describe('MyahReplyAgentReviewService', () => {
           run(2, 'HANDED_OFF'),
           run(3, 'DRAFTED', true),
           run(4, 'SENT'),
+          { ...run(8, 'FAILED'), reason: 'AI credit is used up.' },
         ];
       if (sql.includes('to_regclass')) return [{ ok: true }];
       if (sql.includes('"campaignCreator" cc'))
@@ -93,7 +95,8 @@ describe('MyahReplyAgentReviewService', () => {
       ['SKIPPED', 'Skipped: active in Summer SPF drop'],
       ['NOT_CONTACTABLE', 'Not contactable: no Instagram handle or email'],
       [null, null],
+      ['NEEDS_YOU', 'AI credit is used up.'],
     ]);
-    expect(review.needReviewCount).toBe(2);
+    expect(review.needReviewCount).toBe(3);
   });
 });

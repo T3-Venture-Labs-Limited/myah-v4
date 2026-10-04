@@ -287,7 +287,7 @@ export class MyahReplyAgentService {
       await this.finishRun(
         runId,
         'FAILED',
-        'The agent could not prepare a reply',
+        describeMyahReplyAgentFailure(error),
       );
     }
   }
@@ -840,6 +840,17 @@ export class MyahReplyAgentService {
     return MyahReplyAgentDecisionSchema.parse(result.output);
   }
 }
+
+// What a person sees when the agent could not draft (MYAH-445): the run
+// becomes "Needs you" with this reason until someone replies or regenerates.
+export const describeMyahReplyAgentFailure = (error: unknown): string => {
+  const message = error instanceof Error ? error.message : '';
+  if (/prepaid balance|credits exhausted/i.test(message))
+    return 'AI credit is used up. Add credit, then Regenerate, or reply yourself.';
+  if (/no ai models are available/i.test(message))
+    return 'No AI model is set up for this workspace. Reply yourself.';
+  return 'The agent could not prepare a reply. Regenerate or reply yourself.';
+};
 
 export const buildMyahReplyAgentSystemPrompt = (
   channel: MyahReplyAgentChannel,
