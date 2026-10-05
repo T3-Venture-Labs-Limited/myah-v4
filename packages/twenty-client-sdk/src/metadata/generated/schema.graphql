@@ -3329,9 +3329,18 @@ type CampaignMessageOverviewConnectionDTO {
   filterOptions: CampaignMessageOverviewFilterOptionsDTO!
 }
 
+type MyahCreatorOutreachProgress {
+  state: String!
+  sentSteps: Int!
+  totalSteps: Int!
+  nextEligibleAt: String
+  reason: String
+}
+
 type MyahReplyAgentReviewNode {
   campaignCreatorId: UUID!
   creatorId: UUID!
+  outreach: MyahCreatorOutreachProgress
   nextAction: String
   reason: String
   channel: String

@@ -19,6 +19,7 @@ import {
   findCreatorInstagramHandles,
 } from 'src/modules/campaign-execution/utils/campaign-active-participation.util';
 import {
+  type MyahCreatorOutreachProgressDTO,
   type MyahReplyAgentDraftLabelDTO,
   type MyahReplyAgentReviewDTO,
   type MyahReplyAgentReviewNodeDTO,
@@ -59,7 +60,14 @@ export class MyahReplyAgentReviewService {
       campaignId,
     });
     const creatorIds = memberships.map(({ creatorId }) => creatorId);
-    const runs = await this.latestRuns(workspaceId, campaignId, creatorIds);
+    const [runs, outreach] = await Promise.all([
+      this.latestRuns(workspaceId, campaignId, creatorIds),
+      this.latestOutreach(
+        workspaceId,
+        campaignId,
+        memberships.map(({ id }) => id),
+      ),
+    ]);
     const query = (sql: string, parameters: unknown[]) =>
       this.dataSource.query(sql, parameters);
     const ready = memberships.filter(
@@ -79,6 +87,7 @@ export class MyahReplyAgentReviewService {
       const run = runs.get(membership.creatorId);
       const base = {
         campaignCreatorId: membership.id,
+        outreach: outreach.get(membership.id) ?? null,
         creatorId: membership.creatorId,
         channel: run?.channel ?? null,
         conversationRecordId: run?.conversationRecordId ?? null,
@@ -254,9 +263,74 @@ export class MyahReplyAgentReviewService {
       return repository.find({
         where: 'id' in where ? { id: In([where.id]) } : where,
         select: { id: true, campaignId: true, creatorId: true, stage: true },
+        // ponytail: review/progress covers 5,000 memberships; paginate before larger Campaigns.
         take: 5_000,
       });
     }, authContext);
+  }
+
+  private async latestOutreach(
+    workspaceId: string,
+    campaignId: string,
+    membershipIds: string[],
+  ): Promise<Map<string, MyahCreatorOutreachProgressDTO>> {
+    if (membershipIds.length === 0) return new Map();
+    const found = (await this.dataSource.query(
+      `SELECT DISTINCT ON (e."campaignCreatorId")
+              e."campaignCreatorId", e.state, e."authoredMessageCount" AS "totalSteps",
+              o.state AS "occurrenceState", o."dueAt",
+              COALESCE(e."holdReason", o."holdReason", o."terminalReason") AS reason,
+              (SELECT COUNT(*)::int FROM core."campaignOccurrence" sent
+                WHERE sent."workspaceId"=e."workspaceId" AND sent."enrollmentId"=e.id
+                  AND sent.state='SUCCEEDED') AS "sentSteps"
+         FROM core."campaignEnrollment" e
+         LEFT JOIN core."campaignOccurrence" o
+           ON o."workspaceId"=e."workspaceId" AND o."enrollmentId"=e.id
+          AND o."authoredMessageIndex"=e."nextAuthoredMessageIndex"
+        WHERE e."workspaceId"=$1 AND e."campaignId"=$2
+          AND e."campaignCreatorId"=ANY($3::uuid[])
+        ORDER BY e."campaignCreatorId", e."enrolledAt" DESC, e."authorizationGeneration" DESC, e.id`,
+      [workspaceId, campaignId, membershipIds],
+    )) as Array<{
+      campaignCreatorId: string;
+      state: string;
+      occurrenceState: string | null;
+      sentSteps: number;
+      totalSteps: number;
+      dueAt: Date | string | null;
+      reason: string | null;
+    }>;
+    return new Map(
+      found.map((row) => {
+        const state =
+          row.state !== 'ACTIVE'
+            ? row.state
+            : row.occurrenceState === 'HELD' ||
+                row.occurrenceState === 'UNKNOWN' ||
+                (row.reason !== null && row.occurrenceState !== 'CANCELLED')
+              ? 'NEEDS_YOU'
+              : row.occurrenceState === 'CANCELLED'
+                ? 'PAUSED'
+                : row.sentSteps > 0
+                  ? 'CONTACTED'
+                  : 'SCHEDULED';
+        return [
+          row.campaignCreatorId,
+          {
+            state,
+            sentSteps: row.sentSteps,
+            totalSteps: row.totalSteps,
+            nextEligibleAt:
+              (state === 'SCHEDULED' || state === 'CONTACTED') &&
+              row.occurrenceState === 'PENDING' &&
+              row.dueAt !== null
+                ? new Date(row.dueAt).toISOString()
+                : null,
+            reason: row.reason,
+          },
+        ];
+      }),
+    );
   }
 
   private async latestRuns(

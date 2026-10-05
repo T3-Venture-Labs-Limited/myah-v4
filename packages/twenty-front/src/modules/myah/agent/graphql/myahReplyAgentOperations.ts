@@ -12,6 +12,13 @@ export const GET_MYAH_REPLY_AGENT_REVIEW = gql`
         channel
         conversationRecordId
         inboxContactId
+        outreach {
+          state
+          sentSteps
+          totalSteps
+          nextEligibleAt
+          reason
+        }
       }
     }
   }
@@ -42,6 +49,13 @@ export const GET_MYAH_REPLY_AGENT_DRAFT_LABEL = gql`
 export type MyahReplyAgentReviewNode = {
   campaignCreatorId: string;
   creatorId: string;
+  outreach?: {
+    state: string;
+    sentSteps: number;
+    totalSteps: number;
+    nextEligibleAt: string | null;
+    reason: string | null;
+  } | null;
   nextAction:
     | 'REVIEW_DRAFT'
     | 'NEEDS_YOU'

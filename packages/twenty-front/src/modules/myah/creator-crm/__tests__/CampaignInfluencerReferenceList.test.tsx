@@ -36,7 +36,7 @@ jest.mock('@/object-metadata/hooks/useObjectMetadataItems', () => ({
 
 const onOpen = jest.fn();
 const fetchMore = jest.fn();
-const refetch = jest.fn();
+const refetch = jest.fn().mockResolvedValue(undefined);
 const records = [
   {
     id: 'membership-1',
@@ -128,6 +128,96 @@ beforeEach(() => {
   (useObjectPermissionsForObject as jest.Mock).mockReturnValue({
     canReadObjectRecords: true,
   });
+});
+
+it('shows live sequence progress, a reply badge and status filters', () => {
+  mockAgentReviewQuery.mockReturnValue({
+    data: {
+      myahReplyAgentReview: {
+        needReviewCount: 0,
+        nodes: [
+          {
+            campaignCreatorId: 'membership-1',
+            nextAction: null,
+            outreach: {
+              state: 'CONTACTED',
+              sentSteps: 1,
+              totalSteps: 2,
+              nextEligibleAt: '2026-10-05T17:14:00Z',
+              reason: null,
+            },
+          },
+          {
+            campaignCreatorId: 'membership-2',
+            nextAction: null,
+            outreach: {
+              state: 'REPLIED',
+              sentSteps: 1,
+              totalSteps: 2,
+              nextEligibleAt: null,
+              reason: null,
+            },
+          },
+        ],
+      },
+    },
+    refetch: mockAgentReviewRefetch,
+  } as never);
+  setup({
+    records: [
+      ...records,
+      {
+        id: 'membership-2',
+        campaignId: 'campaign-1',
+        creatorId: 'creator-2',
+        stage: 'NEGOTIATING',
+        creator: { id: 'creator-2', name: 'Luca Romano' },
+      },
+    ],
+  });
+  expect(screen.getByRole('button', { name: /Ava Rivera/ })).toHaveTextContent(
+    'Step 1 of 2',
+  );
+  expect(screen.getByRole('button', { name: /Ava Rivera/ })).toHaveTextContent(
+    'Next eligible',
+  );
+  expect(screen.getByRole('status')).toHaveTextContent('1 replied');
+  fireEvent.change(screen.getByRole('combobox', { name: 'Outreach status' }), {
+    target: { value: 'REPLIED' },
+  });
+  expect(
+    screen.queryByRole('button', { name: /Ava Rivera/ }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Luca Romano/ })).toHaveTextContent(
+    'Replied',
+  );
+  expect(useFindManyRecords).toHaveBeenCalledWith(
+    expect.objectContaining({
+      objectNameSingular: 'campaignCreator',
+      filter: {
+        campaignId: { eq: 'campaign-1' },
+        id: { in: ['membership-2'] },
+      },
+    }),
+  );
+  mockAgentReviewQuery.mockReturnValue({
+    data: undefined,
+    refetch: mockAgentReviewRefetch,
+  });
+});
+
+it('uses a valid match-nothing filter when no influencers have the selected status', () => {
+  setup();
+  fireEvent.change(screen.getByRole('combobox', { name: 'Outreach status' }), {
+    target: { value: 'REPLIED' },
+  });
+  expect(useFindManyRecords).toHaveBeenCalledWith(
+    expect.objectContaining({
+      objectNameSingular: 'campaignCreator',
+      filter: { campaignId: { eq: 'campaign-1' }, id: { is: 'NULL' } },
+    }),
+  );
+  expect(screen.getByText('No influencers match this status.')).toBeVisible();
 });
 
 it('shows the agent next action and filters to influencers that need review', () => {
@@ -228,7 +318,7 @@ it('renders only permission-scoped Campaign rows with recorded metadata stage, s
     }),
   );
   expect(row).toHaveTextContent('Negotiating');
-  expect(row).toHaveTextContent('Not available yet');
+  expect(row).toHaveTextContent('Progress unavailable');
   fireEvent.click(row);
   expect(row).toHaveAttribute('aria-pressed', 'true');
   expect(onOpen).toHaveBeenCalledWith({
