@@ -996,6 +996,7 @@ export type CampaignEmailAccountDto = {
 
 export enum CampaignEmailAccountHealth {
   AVAILABLE = 'AVAILABLE',
+  IMPORTING = 'IMPORTING',
   RECONNECT_REQUIRED = 'RECONNECT_REQUIRED',
   UNAVAILABLE = 'UNAVAILABLE'
 }
