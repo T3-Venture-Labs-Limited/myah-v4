@@ -98,7 +98,8 @@ export class CampaignMessageOverviewInput {
 @InputType()
 export class CampaignMessageOverviewDetailInput {
   @Field(() => ID)
-  @IsUUID('4')
+  // Later steps get deterministic (v5) ids; only step 1 is random (v4).
+  @IsUUID()
   occurrenceId: string;
 }
 

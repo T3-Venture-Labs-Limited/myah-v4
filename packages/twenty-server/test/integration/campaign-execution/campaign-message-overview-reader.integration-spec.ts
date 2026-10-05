@@ -915,6 +915,7 @@ describe('Campaign message overview PostgreSQL reader', () => {
       sent: randomUUID(),
       held: randomUUID(),
       unknown: randomUUID(),
+      sending: randomUUID(),
     };
     const messageIds = Object.fromEntries(
       Object.keys(ig).map((key) => [key, randomUUID()]),
@@ -984,7 +985,8 @@ describe('Campaign message overview PostgreSQL reader', () => {
          VALUES ($1,$5,$6,$7,$8,$9,10,'PENDING','2026-11-08T12:00:00Z',NULL,NULL,NULL,NULL),
                 ($2,$5,$6,$7,$8,$10,11,'SUCCEEDED','2026-11-07T09:00:00Z',NULL,$13,'PROVIDER_ACCEPTED','2026-11-07T10:00:00Z'),
                 ($3,$5,$6,$7,$8,$11,12,'HELD','2026-11-07T08:00:00Z','SENDER_NOT_READY',NULL,NULL,NULL),
-                ($4,$5,$6,$7,$8,$12,13,'UNKNOWN','2026-11-07T07:00:00Z',NULL,$14,NULL,NULL)`,
+                ($4,$5,$6,$7,$8,$12,13,'UNKNOWN','2026-11-07T07:00:00Z',NULL,$14,NULL,NULL),
+                ($15,$5,$6,$7,$8,$16,14,'IN_FLIGHT','2026-11-07T06:00:00Z',NULL,NULL,NULL,NULL)`,
         [
           ig.queued,
           ig.sent,
@@ -1000,6 +1002,8 @@ describe('Campaign message overview PostgreSQL reader', () => {
           messageIds.unknown,
           receipts.sent,
           receipts.unknown,
+          ig.sending,
+          messageIds.sending,
         ],
       );
 
@@ -1040,6 +1044,13 @@ describe('Campaign message overview PostgreSQL reader', () => {
           reason: 'OUTCOME_UNKNOWN',
         }),
       );
+      // Being sent right now is not a problem (MYAH-455).
+      expect(byId.get(ig.sending)).toEqual(
+        expect.objectContaining({
+          status: 'SCHEDULED',
+          needsAttention: false,
+        }),
+      );
       expect(byId.get(occurrenceIds.sent)?.platform).toBe('Email');
 
       const sent = await readOverview(adminAuthContext, {
@@ -1051,6 +1062,12 @@ describe('Campaign message overview PostgreSQL reader', () => {
       expect(sent.nodes.map(({ occurrenceId }) => occurrenceId)).not.toContain(
         ig.unknown,
       );
+      const attention = await readOverview(adminAuthContext, {
+        view: CampaignMessageOverviewView.NEEDS_ATTENTION,
+      });
+      expect(
+        attention.nodes.map(({ occurrenceId }) => occurrenceId),
+      ).not.toContain(ig.sending);
     } finally {
       await global.testDataSource.query(
         `DELETE FROM core."campaignOccurrence" WHERE id=ANY($1::uuid[])`,

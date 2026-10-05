@@ -1,3 +1,4 @@
+import { campaignMessageReasonLabel } from '@/myah/campaign-messages/utils/campaignMessageReasonLabel';
 import { gql } from '@apollo/client';
 import { useQuery } from '@apollo/client/react';
 import { useEffect } from 'react';
@@ -192,10 +193,13 @@ export const SidePanelCampaignMessageOverviewPage = () => {
   const row = detail.data?.campaignMessageOverviewDetail;
 
   useEffect(() => {
+    // A failed request stays open with an error; only a message that is
+    // really gone (or another workspace's selection) closes the panel.
     if (
       !campaignMessageOverviewSelection ||
       (selectionIsCurrent && detail.loading) ||
-      (selectionIsCurrent && row)
+      (selectionIsCurrent && row) ||
+      (selectionIsCurrent && detail.error)
     )
       return;
 
@@ -204,12 +208,28 @@ export const SidePanelCampaignMessageOverviewPage = () => {
   }, [
     campaignMessageOverviewSelection,
     closeSidePanelMenu,
+    detail.error,
     detail.loading,
     row,
     selectionIsCurrent,
     store,
   ]);
 
+  if (selectionIsCurrent && detail.error && !row) {
+    return (
+      <StyledContainer aria-label="Campaign message details">
+        <StyledContent>
+          <StyledHint>Message details could not be loaded.</StyledHint>
+          <Button
+            size="small"
+            title="Try again"
+            variant="secondary"
+            onClick={() => void detail.refetch()}
+          />
+        </StyledContent>
+      </StyledContainer>
+    );
+  }
   if (!campaignMessageOverviewSelection || !selectionIsCurrent || !row) {
     return <p>Message details are unavailable in this workspace.</p>;
   }
@@ -221,7 +241,11 @@ export const SidePanelCampaignMessageOverviewPage = () => {
   return (
     <StyledContainer aria-label="Campaign message details">
       <StyledContent>
-        <StyledEyebrow>Campaign email · Read only</StyledEyebrow>
+        <StyledEyebrow>
+          {row.platform === 'Instagram'
+            ? 'Campaign Instagram message · Read only'
+            : 'Campaign email · Read only'}
+        </StyledEyebrow>
         <StyledTitle>{row.subject ?? 'Message preview'}</StyledTitle>
         <StyledBadge attention={row.needsAttention} sent={Boolean(row.sentAt)}>
           {statusLabel}
@@ -265,9 +289,8 @@ export const SidePanelCampaignMessageOverviewPage = () => {
                 ? `Provider accepted · ${displayTime(row.sentAt)}`
                 : `Eligible after · ${displayTime(row.eligibleAfter)}`}
             </li>
-            {row.reason ? <li>{row.reason}</li> : null}
-            {row.needsAttention && !row.reason ? (
-              <li>Review required</li>
+            {row.needsAttention ? (
+              <li>{campaignMessageReasonLabel(row.reason)}</li>
             ) : null}
           </StyledEvents>
         </StyledSection>

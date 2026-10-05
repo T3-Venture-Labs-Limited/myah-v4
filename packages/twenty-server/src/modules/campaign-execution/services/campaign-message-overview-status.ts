@@ -28,11 +28,16 @@ export const deriveCampaignMessageOverviewStatus = (
       input.receiptState === 'PROVIDER_ACCEPTED'
     )
       return 'SENT';
-    return ['HELD', 'UNKNOWN', 'IN_FLIGHT', 'SUCCEEDED'].includes(
-      input.occurrenceState,
-    ) || input.receiptState != null
-      ? 'NEEDS_ATTENTION'
-      : 'SCHEDULED';
+    // Being sent right now, or waiting (including after a rate limit), is
+    // not a problem; only held, failed or unconfirmed steps need attention.
+    const sending =
+      input.occurrenceState === 'IN_FLIGHT' &&
+      (input.receiptState == null || input.receiptState === 'PROCESSING');
+    const waiting =
+      input.occurrenceState === 'PENDING' &&
+      input.receiptState !== 'FAILED' &&
+      input.receiptState !== 'UNKNOWN';
+    return sending || waiting ? 'SCHEDULED' : 'NEEDS_ATTENTION';
   }
   if (
     input.occurrenceState === 'HELD' ||
