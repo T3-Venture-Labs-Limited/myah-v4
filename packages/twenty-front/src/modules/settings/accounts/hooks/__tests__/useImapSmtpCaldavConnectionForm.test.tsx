@@ -2,18 +2,25 @@ import { act, renderHook } from '@testing-library/react';
 import { type ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 
-import { EmailConnectionSecurity } from '~/generated-metadata/graphql';
+import {
+  EmailConnectionSecurity,
+  StartChannelSyncDocument,
+} from '~/generated-metadata/graphql';
 import { SettingsPath } from 'twenty-shared/types';
 import { useImapSmtpCaldavConnectionForm } from '@/settings/accounts/hooks/useImapSmtpCaldavConnectionForm';
 
 const mockSaveConnection = jest.fn();
+const mockStartSync = jest.fn();
 const mockNavigateApp = jest.fn();
 const mockNavigateSettings = jest.fn();
 const mockEnqueueErrorSnackBar = jest.fn();
 const mockEnqueueSuccessSnackBar = jest.fn();
 
 jest.mock('@apollo/client/react', () => ({
-  useMutation: () => [mockSaveConnection, { loading: false }],
+  useMutation: (document: unknown) => [
+    document === StartChannelSyncDocument ? mockStartSync : mockSaveConnection,
+    { loading: false },
+  ],
 }));
 
 jest.mock('react-router-dom', () => ({
@@ -59,6 +66,7 @@ const formData = {
 describe('useImapSmtpCaldavConnectionForm', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockStartSync.mockResolvedValue({ data: {} });
     mockSaveConnection.mockResolvedValue({
       data: {
         saveImapSmtpCaldavAccount: {
@@ -96,10 +104,53 @@ describe('useImapSmtpCaldavConnectionForm', () => {
       await result.current.handleSave(formData);
     });
 
+    expect(mockNavigateSettings).toHaveBeenCalledWith(SettingsPath.Accounts);
+    expect(mockNavigateApp).not.toHaveBeenCalled();
+    expect(mockStartSync).toHaveBeenCalledWith({
+      variables: { connectedAccountId: '0560dffc-4a79-4c13-9a11-df2745eab756' },
+    });
+  });
+
+  it('finishes pending setup after editing too; the sync endpoint leaves running imports alone', async () => {
+    const connectedAccountId = '0560dffc-4a79-4c13-9a11-df2745eab756';
+    const { result } = renderHook(
+      () =>
+        useImapSmtpCaldavConnectionForm({
+          isEditing: true,
+          connectedAccountId,
+        }),
+      { wrapper },
+    );
+    await act(async () => {
+      await result.current.handleSave(formData);
+    });
+    expect(mockSaveConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variables: expect.objectContaining({ id: connectedAccountId }),
+      }),
+    );
+    expect(mockStartSync).toHaveBeenCalledWith({
+      variables: { connectedAccountId },
+    });
+    expect(mockNavigateSettings).toHaveBeenCalledWith(SettingsPath.Accounts);
+  });
+
+  it('opens the saved account setup if sync could not start, without creating it again', async () => {
+    mockStartSync.mockRejectedValueOnce(new Error('Sync unavailable'));
+    const { result } = renderHook(() => useImapSmtpCaldavConnectionForm(), {
+      wrapper,
+    });
+    await act(async () => {
+      await result.current.handleSave(formData);
+    });
+    expect(mockSaveConnection).toHaveBeenCalledTimes(1);
     expect(mockNavigateSettings).toHaveBeenCalledWith(
       SettingsPath.AccountsConfiguration,
-      { connectedAccountId: '0560dffc-4a79-4c13-9a11-df2745eab756' },
+      {
+        connectedAccountId: '0560dffc-4a79-4c13-9a11-df2745eab756',
+      },
     );
-    expect(mockNavigateApp).not.toHaveBeenCalled();
+    expect(mockEnqueueSuccessSnackBar).not.toHaveBeenCalled();
+    expect(mockEnqueueErrorSnackBar).toHaveBeenCalled();
   });
 });

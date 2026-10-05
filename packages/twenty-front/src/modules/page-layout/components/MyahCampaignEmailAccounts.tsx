@@ -113,7 +113,7 @@ type CampaignEmailAccount = {
   senderEmail: string | null;
   label: string;
   isDefault: boolean;
-  health: 'AVAILABLE' | 'RECONNECT_REQUIRED' | 'UNAVAILABLE';
+  health: 'AVAILABLE' | 'IMPORTING' | 'RECONNECT_REQUIRED' | 'UNAVAILABLE';
 };
 
 const StyledAccountTags = styled.div`
@@ -190,6 +190,7 @@ export const MyahCampaignEmailAccounts = ({
   }>(CAMPAIGN_EMAIL_ACCOUNT_CANDIDATES, {
     variables: { input: { campaignId } },
     skip: !canReadCampaign,
+    pollInterval: isPickerOpen ? 15_000 : 0,
   });
   const [linkAccount, { loading: linking }] = useMutation<{
     linkCampaignEmailAccount: CampaignEmailAccount[];
@@ -506,7 +507,9 @@ export const MyahCampaignEmailAccounts = ({
                           title={
                             isCandidateAvailable
                               ? `Add ${accountIdentifier(candidate)}`
-                              : `${accountIdentifier(candidate)} is unavailable`
+                              : candidate.health === 'IMPORTING'
+                                ? `${accountIdentifier(candidate)} · Importing — ready in a few minutes`
+                                : `${accountIdentifier(candidate)} is unavailable`
                           }
                           type="button"
                           variant="tertiary"
@@ -528,7 +531,10 @@ export const MyahCampaignEmailAccounts = ({
               setIsPickerOpen(false);
               addEmailAccountButtonRef.current?.focus();
             }}
-            onOpen={() => setIsPickerOpen(true)}
+            onOpen={() => {
+              setIsPickerOpen(true);
+              void refreshAccountQueries().catch(() => undefined);
+            }}
             renderClickableComponentAsChild
           />
         }
@@ -570,6 +576,12 @@ export const MyahCampaignEmailAccounts = ({
           paused until it is available.
         </p>
       ) : null}
+      {defaultAccount?.health === 'IMPORTING' ? (
+        <p role="status">
+          Importing — ready in a few minutes. Email drafting will be available
+          after the first import.
+        </p>
+      ) : null}
       {defaultAccount?.health === 'UNAVAILABLE' ? (
         <p role="alert">
           The default email account is unavailable. Email drafting is paused
@@ -601,7 +613,9 @@ export const MyahCampaignEmailAccounts = ({
                   <span aria-label={`${accountIdentifier(account)} health`}>
                     {account.health === 'RECONNECT_REQUIRED'
                       ? 'Reconnect required'
-                      : 'Unavailable'}
+                      : account.health === 'IMPORTING'
+                        ? 'Importing — ready in a few minutes'
+                        : 'Unavailable'}
                   </span>
                   {account.provider === null && account.senderEmail === null ? (
                     <span>

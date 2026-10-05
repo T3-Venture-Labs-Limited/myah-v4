@@ -150,6 +150,7 @@ export class CampaignAccountService {
             scopes: account.scopes,
             isSyncEnabled: channel.isSyncEnabled,
             syncStatus: channel.syncStatus,
+            syncedAt: channel.syncedAt,
             isManaged,
           });
         candidates.push(
@@ -483,8 +484,7 @@ export class CampaignAccountService {
       if (
         !channel ||
         channel.id !== link.messageChannelId ||
-        !channel.isSyncEnabled ||
-        channel.syncStatus !== MessageChannelSyncStatus.ACTIVE
+        this.health(account, channel) !== CampaignEmailAccountHealth.AVAILABLE
       )
         throw new Error('Campaign default email channel is unavailable');
       const isManaged = await this.managedEmailMailboxRepository.exists(
@@ -802,10 +802,13 @@ export class CampaignAccountService {
   ): CampaignEmailAccountHealth {
     if (account.archivedAt != null || !channel.isSyncEnabled)
       return CampaignEmailAccountHealth.UNAVAILABLE;
-    if (
-      account.authFailedAt != null ||
-      channel.syncStatus !== MessageChannelSyncStatus.ACTIVE
-    )
+    if (account.authFailedAt != null)
+      return CampaignEmailAccountHealth.RECONNECT_REQUIRED;
+    if (channel.syncStatus === MessageChannelSyncStatus.ONGOING)
+      return channel.syncedAt == null
+        ? CampaignEmailAccountHealth.IMPORTING
+        : CampaignEmailAccountHealth.AVAILABLE;
+    if (channel.syncStatus !== MessageChannelSyncStatus.ACTIVE)
       return CampaignEmailAccountHealth.RECONNECT_REQUIRED;
     return CampaignEmailAccountHealth.AVAILABLE;
   }
