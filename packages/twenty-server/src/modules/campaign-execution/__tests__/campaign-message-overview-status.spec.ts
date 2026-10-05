@@ -4,6 +4,36 @@ import {
 } from 'src/modules/campaign-execution/services/campaign-message-overview-status';
 
 describe('campaign message overview status', () => {
+  describe('Instagram steps', () => {
+    const instagram = (occurrenceState: string, receiptState: string | null) =>
+      deriveCampaignMessageOverviewStatus({
+        attemptState: null,
+        occurrenceState,
+        projectedMessageThreadId: null,
+        providerAcceptedAt: null,
+        stepChannel: 'INSTAGRAM',
+        receiptState,
+      });
+
+    it.each([
+      ['PENDING', null, 'SCHEDULED'],
+      // Being sent right now (MYAH-455: was shown as "Needs attention").
+      ['IN_FLIGHT', null, 'SCHEDULED'],
+      ['IN_FLIGHT', 'PROCESSING', 'SCHEDULED'],
+      // Rate limited and rescheduled.
+      ['PENDING', 'BLOCKED', 'SCHEDULED'],
+      ['SUCCEEDED', 'PROVIDER_ACCEPTED', 'SENT'],
+      ['SUCCEEDED', 'SENT', 'SENT'],
+      ['HELD', null, 'NEEDS_ATTENTION'],
+      ['UNKNOWN', 'UNKNOWN', 'NEEDS_ATTENTION'],
+      ['IN_FLIGHT', 'FAILED', 'NEEDS_ATTENTION'],
+      ['PENDING', 'FAILED', 'NEEDS_ATTENTION'],
+      ['SUCCEEDED', null, 'NEEDS_ATTENTION'],
+    ])('%s with receipt %s is %s', (occurrenceState, receiptState, status) => {
+      expect(instagram(occurrenceState, receiptState)).toBe(status);
+    });
+  });
+
   it.each(['RESERVED', 'PROCESSING'])(
     '%s protected attempts need attention',
     (attemptState) => {

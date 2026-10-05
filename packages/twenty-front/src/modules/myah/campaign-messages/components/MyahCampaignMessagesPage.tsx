@@ -1,3 +1,4 @@
+import { campaignMessageReasonLabel } from '@/myah/campaign-messages/utils/campaignMessageReasonLabel';
 import { gql } from '@apollo/client';
 import { useApolloClient, useQuery } from '@apollo/client/react';
 import { styled } from '@linaria/react';
@@ -297,6 +298,9 @@ const StyledTable = styled.table`
   th:first-child,
   td:first-child {
     padding-left: ${themeCssVariables.spacing[4]};
+  }
+  tbody tr {
+    cursor: pointer;
   }
   tbody tr:hover {
     background: ${themeCssVariables.background.transparent.lighter};
@@ -802,7 +806,7 @@ export const MyahCampaignMessagesPage = () => {
                       ? 'No estimate available'
                       : 'Forecast pending or incomplete';
               return (
-                <tr key={row.occurrenceId}>
+                <tr key={row.occurrenceId} onClick={() => openRow(row)}>
                   <td>
                     <StyledRecipientButton
                       aria-label={row.creatorName ?? 'Creator unavailable'}
@@ -812,7 +816,11 @@ export const MyahCampaignMessagesPage = () => {
                         else rowRefs.current.delete(row.occurrenceId);
                       }}
                       type="button"
-                      onClick={() => openRow(row)}
+                      onClick={(event) => {
+                        // The row opens it; avoid opening twice.
+                        event.stopPropagation();
+                        openRow(row);
+                      }}
                     >
                       <StyledAvatar>{initials(row.creatorName)}</StyledAvatar>
                       <span>
@@ -852,7 +860,7 @@ export const MyahCampaignMessagesPage = () => {
                     </StyledBadge>
                     {row.needsAttention ? (
                       <StyledSubText>
-                        {row.reason ?? 'Review required'}
+                        {campaignMessageReasonLabel(row.reason)}
                       </StyledSubText>
                     ) : null}
                   </td>
