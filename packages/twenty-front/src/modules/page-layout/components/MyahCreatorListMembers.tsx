@@ -1,3 +1,4 @@
+import { useOpenObjectRecordsSpreadsheetImportDialog } from '@/object-record/spreadsheet-import/hooks/useOpenObjectRecordsSpreadsheetImportDialog';
 import { gql } from '@apollo/client';
 import { useMutation } from '@apollo/client/react';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
@@ -20,6 +21,17 @@ const ADD_MEMBER = gql`
     }
   }
 `;
+
+const ADD_MEMBERS = gql`
+  mutation AddCreatorListMembersIntent($input: CreatorListMembersIntentInput!) {
+    addCreatorListMembersIntent(input: $input) {
+      id
+    }
+  }
+`;
+
+// The server accepts at most 500 creators per request.
+const ADD_MEMBERS_CHUNK_SIZE = 500;
 
 const REMOVE_MEMBER = gql`
   mutation RemoveCreatorListMemberIntent(
@@ -50,7 +62,10 @@ export const MyahCreatorListMembers = ({
   );
   const { openModal, closeModal } = useModal();
   const [addMember] = useMutation(ADD_MEMBER);
+  const { openObjectRecordsSpreadsheetImportDialog } =
+    useOpenObjectRecordsSpreadsheetImportDialog('creator');
   const [removeMember] = useMutation(REMOVE_MEMBER);
+  const [addMembers] = useMutation(ADD_MEMBERS);
   const {
     records: memberships,
     refetch: refetchMemberships,
@@ -94,6 +109,29 @@ export const MyahCreatorListMembers = ({
     }
   };
 
+  // MYAH-457: import a spreadsheet of creators straight into this List.
+  const importCreatorsIntoList = () =>
+    openObjectRecordsSpreadsheetImportDialog(undefined, async (creatorIds) => {
+      for (
+        let start = 0;
+        start < creatorIds.length;
+        start += ADD_MEMBERS_CHUNK_SIZE
+      ) {
+        await addMembers({
+          variables: {
+            input: {
+              creatorListId,
+              creatorIds: creatorIds.slice(
+                start,
+                start + ADD_MEMBERS_CHUNK_SIZE,
+              ),
+            },
+          },
+        });
+      }
+      await refetchMemberships();
+    });
+
   const submitRemoval = async () => {
     if (!removingCreatorId) return;
 
@@ -122,13 +160,22 @@ export const MyahCreatorListMembers = ({
         }}
       >
         <strong>Members</strong>
-        <Button
-          title="Add Creator"
-          ariaLabel="Add Creator"
-          onClick={() => openModal('creator-list-member-picker')}
-          type="button"
-          variant="secondary"
-        />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Button
+            title="Import creators"
+            ariaLabel="Import creators into this List"
+            onClick={importCreatorsIntoList}
+            type="button"
+            variant="secondary"
+          />
+          <Button
+            title="Add Creator"
+            ariaLabel="Add Creator"
+            onClick={() => openModal('creator-list-member-picker')}
+            type="button"
+            variant="secondary"
+          />
+        </div>
       </div>
       {memberships.length === 0 ? <span>No Creators</span> : null}
       {memberships.map(({ id, creatorId }) => (

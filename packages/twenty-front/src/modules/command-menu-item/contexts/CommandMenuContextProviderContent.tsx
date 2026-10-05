@@ -49,6 +49,10 @@ export const CommandMenuContextProviderContent = ({
     const isInstagramAccountIndex =
       commandMenuContextApi.objectMetadataItem.nameSingular ===
       'myahInstagramAccount';
+    // Importing "Creator Lists" records isn't useful; creators are imported
+    // into a List from its Members section instead (MYAH-457).
+    const isCreatorListIndex =
+      commandMenuContextApi.objectMetadataItem.nameSingular === 'creatorList';
     const currentObjectMetadataItemId =
       commandMenuContextApi.objectMetadataItem.id;
     const hasSelectedRecords =
@@ -64,6 +68,12 @@ export const CommandMenuContextProviderContent = ({
           (item.engineComponentKey === EngineComponentKey.CREATE_NEW_RECORD ||
             item.engineComponentKey === EngineComponentKey.IMPORT_RECORDS ||
             item.engineComponentKey === EngineComponentKey.SEE_DELETED_RECORDS)
+        ) {
+          return false;
+        }
+        if (
+          isCreatorListIndex &&
+          item.engineComponentKey === EngineComponentKey.IMPORT_RECORDS
         ) {
           return false;
         }
