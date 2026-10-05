@@ -8,6 +8,7 @@ export const MESSAGE_QUEUE_PRIORITY = {
   [MessageQueue.webhookQueue]: 2,
   [MessageQueue.messagingQueue]: 2,
   [MessageQueue.unipileInstagramSyncQueue]: 2,
+  [MessageQueue.myahCreatorMessageQueue]: 2,
   [MessageQueue.delayedJobsQueue]: 3,
   [MessageQueue.calendarQueue]: 4,
   [MessageQueue.contactCreationQueue]: 4,

@@ -23,7 +23,7 @@ export class MyahCreatorMessageTriggerService {
   private readonly logger = new Logger(MyahCreatorMessageTriggerService.name);
 
   constructor(
-    @InjectMessageQueue(MessageQueue.messagingQueue)
+    @InjectMessageQueue(MessageQueue.myahCreatorMessageQueue)
     private readonly queue: MessageQueueService,
   ) {}
 

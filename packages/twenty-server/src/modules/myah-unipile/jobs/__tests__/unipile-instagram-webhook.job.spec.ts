@@ -960,7 +960,7 @@ describe('UnipileInstagramWebhookJob', () => {
     const Job = jobModule.UnipileInstagramWebhookJob;
 
     expect(Reflect.getMetadata(PROCESSOR_METADATA, Job)).toEqual({
-      queueName: MessageQueue.messagingQueue,
+      queueName: MessageQueue.myahCreatorMessageQueue,
       scope: Scope.REQUEST,
     });
     expect(Reflect.getMetadata(PROCESS_METADATA, Job.prototype.handle)).toEqual(

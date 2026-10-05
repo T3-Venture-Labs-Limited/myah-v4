@@ -8,11 +8,13 @@ import { UnipileInstagramWebhookJob } from 'src/modules/myah-unipile/jobs/unipil
 @Injectable()
 export class UnipileInstagramWebhookQueue {
   constructor(
-    @InjectMessageQueue(MessageQueue.messagingQueue)
-    private readonly messagingQueue: MessageQueueService,
+    @InjectMessageQueue(MessageQueue.myahCreatorMessageQueue)
+    private readonly creatorMessageQueue: MessageQueueService,
   ) {}
 
   async enqueue(eventId: string): Promise<void> {
-    await this.messagingQueue.add(UnipileInstagramWebhookJob.name, { eventId });
+    await this.creatorMessageQueue.add(UnipileInstagramWebhookJob.name, {
+      eventId,
+    });
   }
 }
