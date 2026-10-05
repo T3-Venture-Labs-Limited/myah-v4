@@ -59,7 +59,10 @@ const page = (
 ) => ({
   threadId,
   anchorKey: `legacy:${threadId}`,
-  root: message(`${threadId}-root`, threadId),
+  root: {
+    ...message(`${threadId}-root`, threadId),
+    receivedAt: '2026-08-31T00:00:00Z',
+  },
   messages: ids.map((id) => message(id, threadId)),
   olderCursor,
   newerCursor,
@@ -217,21 +220,21 @@ describe('useMyahInboxEmailHistory', () => {
     await waitFor(() => expect(requests).toHaveLength(6));
     await respond(requests[5], cards(['t9'], 'fresh'));
     await waitFor(() => expect(requests).toHaveLength(7));
-    // Older m1 lost access and no new mail arrived. Revalidate each loaded ID.
+    // Newest m2 is recovered first; its page omits revoked older m1.
     expect(requests[6].variables).toMatchObject({
-      messageId: 'm1',
+      messageId: 'm2',
       snapshot: 'fresh',
     });
-    await respond(requests[6], { myahInboxContactEmailMessageLocation: null });
-    await waitFor(() => expect(requests).toHaveLength(8));
-    expect(requests[7].variables.messageId).toBe('m2');
-    await respond(requests[7], {
+    await respond(requests[6], {
       myahInboxContactEmailMessageLocation: {
         messageId: 'm2',
         card: card('t9'),
         page: page(['m2']),
       },
     });
+    await waitFor(() => expect(requests).toHaveLength(8));
+    expect(requests[7].variables.messageId).toBe('m1');
+    await respond(requests[7], { myahInboxContactEmailMessageLocation: null });
     expect(hook.result.current.status).toBe('ready');
     expect(
       hook.result.current.windows.flatMap((window) =>
@@ -646,31 +649,22 @@ describe('useMyahInboxEmailHistory', () => {
     await waitFor(() => expect(requests).toHaveLength(8));
     expect(requests[7].variables).toMatchObject({
       snapshot: 'snapshot-1',
-      messageId: 'm85',
+      messageId: 'm90',
     });
     // Neither stale bodies nor an unrenderable reading anchor are published in flight.
     expect(hook.result.current.windows).toEqual([]);
     await respond(requests[7], {
-      myahInboxContactEmailMessageLocation: {
-        messageId: 'm85',
-        card: card('t9'),
-        page: page(ids(66, 85), 'before-66', 'after-85'),
-      },
-    });
-    await waitFor(() => expect(requests).toHaveLength(9));
-    expect(requests[8].variables.messageId).toBe('m90');
-    await respond(requests[8], {
       myahInboxContactEmailMessageLocation: {
         messageId: 'm90',
         card: card('t9'),
         page: page(ids(71, 90), 'before-71', 'after-90'),
       },
     });
-    await waitFor(() => expect(requests).toHaveLength(10));
-    await respond(requests[9], cards(['t9'], 'snapshot-2'));
+    await waitFor(() => expect(requests).toHaveLength(9));
+    await respond(requests[8], cards(['t9'], 'snapshot-2'));
     expect(hook.result.current.status).toBe('ready');
     const windows = hook.result.current.windows;
-    expect(windows).toHaveLength(4);
+    expect(windows).toHaveLength(3);
     expect(windows.find(({ id }) => id === windowId)).toMatchObject({
       anchorMessageId: 'm85',
       pages: [
@@ -696,12 +690,12 @@ describe('useMyahInboxEmailHistory', () => {
     act(() => {
       void hook.result.current.loadMessages(older.id, 'newer');
     });
-    await waitFor(() => expect(requests).toHaveLength(11));
-    expect(requests[10].variables).toMatchObject({
+    await waitFor(() => expect(requests).toHaveLength(10));
+    expect(requests[9].variables).toMatchObject({
       cursor: 'after-80',
       snapshot: 'snapshot-1',
     });
-    await respond(requests[10], {
+    await respond(requests[9], {
       myahInboxContactEmailCardMessages: page(
         ids(81, 100),
         'before-81',
@@ -711,12 +705,12 @@ describe('useMyahInboxEmailHistory', () => {
     act(() => {
       void hook.result.current.loadMessages(tail.id, 'older');
     });
-    await waitFor(() => expect(requests).toHaveLength(12));
-    expect(requests[11].variables).toMatchObject({
+    await waitFor(() => expect(requests).toHaveLength(11));
+    expect(requests[10].variables).toMatchObject({
       cursor: 'before-91',
       snapshot: 'snapshot-1',
     });
-    await respond(requests[11], {
+    await respond(requests[10], {
       myahInboxContactEmailCardMessages: page(
         ids(71, 90),
         'before-71',
@@ -1708,7 +1702,7 @@ describe('useMyahInboxEmailHistory', () => {
       myahInboxContactEmailCardMessages: page(['m60', 'm80'], 'before-60'),
     });
     const windowId = hook.result.current.windows[0].id;
-    act(() => hook.result.current.setReadingAnchor(windowId, 'm80'));
+    act(() => hook.result.current.setReadingAnchor(windowId, 'm60'));
     act(() => {
       void hook.result.current.rebase();
     });
@@ -1753,15 +1747,18 @@ describe('useMyahInboxEmailHistory', () => {
         ({ card }: { card: MyahInboxEmailCardFieldsFragment }) => card.threadId,
       ),
     ).toEqual(['t7', 't8', 't9']);
-    expect(hook.result.current.windows[0]).toMatchObject({
-      id: windowId,
-      anchorMessageId: 'm80',
+    expect(
+      hook.result.current.windows.find(({ id }) => id === windowId),
+    ).toMatchObject({
+      anchorMessageId: 'm60',
       snapshot: 'snapshot-2',
     });
     expect(
-      hook.result.current.windows[1].pages[0].messages.map(
-        ({ id }: MyahInboxEmailMessagePageFieldsFragment['root']) => id,
-      ),
+      hook.result.current.windows
+        .find(({ id }) => id === windowId)!
+        .pages[0].messages.map(
+          ({ id }: MyahInboxEmailMessagePageFieldsFragment['root']) => id,
+        ),
     ).toEqual(['m59', 'm60']);
     expect(hook.result.current.historyRebased).toBe(true);
     expect(requests).toHaveLength(8);
@@ -2294,5 +2291,437 @@ describe('useMyahInboxEmailHistory', () => {
       ),
     ).toEqual(['t7', 't8', 't9', 't4', 't5', 't6']);
     expect(client.cache.extract()).toEqual({});
+  });
+  describe('bounded recovery with server-shaped location pages', () => {
+    const dated = (id: string, threadId: string, index: number) => ({
+      ...message(id, threadId),
+      receivedAt: new Date(Date.UTC(2026, 8, 1, 0, index)).toISOString(),
+    });
+    const shaped = (threadId: string, total: number, target?: string) => {
+      const ids = Array.from(
+        { length: total },
+        (_, index) => `${threadId}-m${index + 1}`,
+      );
+      const end = target ? ids.indexOf(target) + 1 : total;
+      const start = Math.max(0, end - 20);
+      return {
+        ...page(
+          [],
+          start ? `older-${start}` : null,
+          end < total ? `newer-${end}` : null,
+          threadId,
+        ),
+        root: dated(`${threadId}-root`, threadId, 0),
+        messages: ids
+          .slice(start, end)
+          .map((id, index) => dated(id, threadId, start + index + 1)),
+      };
+    };
+    const recover = async (
+      mode: 'relocate' | 'displace' | 'rebase',
+      totals: number[],
+      revoke?: string,
+      older = false,
+    ) => {
+      const { hook, requests } = setup();
+      const threads = totals.map((_, index) => `t${index + 1}`);
+      await respond(requests.shift()!, cards(threads, 'old'));
+      for (const [index, threadId] of threads.entries()) {
+        act(() => {
+          void hook.result.current.openCard(
+            hook.result.current.segments[0].id,
+            threadId,
+          );
+        });
+        await waitFor(() => expect(requests).toHaveLength(1));
+        await respond(requests.shift()!, {
+          myahInboxContactEmailCardMessages: shaped(threadId, totals[index]),
+        });
+        if (older) {
+          const window = hook.result.current.windows.at(-1)!;
+          act(() => {
+            void hook.result.current.loadMessages(window.id, 'older');
+          });
+          await waitFor(() => expect(requests).toHaveLength(1));
+          await respond(requests.shift()!, {
+            myahInboxContactEmailCardMessages: {
+              ...shaped(threadId, totals[index] - 20),
+              newerCursor: 'newer-20',
+            },
+          });
+        }
+      }
+      const priorIds = hook.result.current.windows.flatMap((window) =>
+        window.pages.flatMap((p) => p.messages.map((m) => m.id)),
+      );
+      act(() => {
+        void (mode === 'rebase'
+          ? hook.result.current.rebase()
+          : hook.result.current.ambientRefresh());
+      });
+      const locations: string[] = [];
+      let next = 0;
+      for (let guard = 0; guard < 120; guard++) {
+        await waitFor(() =>
+          expect(
+            requests.length > 0 ||
+              (hook.result.current.status === 'ready' &&
+                !hook.result.current.loading &&
+                next > 0),
+          ).toBe(true),
+        );
+        if (!requests.length) break;
+        const request = requests.shift()!;
+        next++;
+        const name = request.name;
+        if (name === 'MyahInboxContactEmailCard') {
+          await respond(request, {
+            myahInboxContactEmailCard: {
+              snapshot: 'fresh',
+              card: card(request.variables.threadId as string),
+            },
+          });
+        } else if (name === 'MyahInboxContactEmailCards') {
+          if (mode === 'relocate' && request.variables.snapshot === 'old')
+            await act(async () =>
+              request.partial(
+                { myahInboxContactEmailCards: null },
+                'Inbox history changed; reload history',
+              ),
+            );
+          else await respond(request, cards(threads, 'fresh'));
+        } else if (name === 'MyahInboxContactEmailCardMessages') {
+          if (mode === 'relocate')
+            await act(async () =>
+              request.partial(
+                { myahInboxContactEmailCardMessages: null },
+                'Inbox history changed; reload history',
+              ),
+            );
+          else {
+            const threadId = request.variables.threadId as string;
+            const index = threads.indexOf(threadId);
+            await respond(request, {
+              myahInboxContactEmailCardMessages: shaped(
+                threadId,
+                totals[index] + (mode === 'displace' ? 1 : 0),
+              ),
+            });
+          }
+        } else if (name === 'MyahInboxContactEmailMessageLocation') {
+          const id = request.variables.messageId as string;
+          locations.push(id);
+          const threadId = id.split('-')[0];
+          const index = threads.indexOf(threadId);
+          await respond(request, {
+            myahInboxContactEmailMessageLocation:
+              id === revoke
+                ? null
+                : {
+                    messageId: id,
+                    card: card(threadId),
+                    page: shaped(
+                      threadId,
+                      totals[index] + (mode === 'displace' ? 1 : 0),
+                      id.endsWith('-root') ? undefined : id,
+                    ),
+                  },
+          });
+        }
+      }
+      expect(hook.result.current.status).toBe('ready');
+      const recovered = hook.result.current.windows.flatMap((window) =>
+        window.pages.flatMap((p) => p.messages.map((m) => m.id)),
+      );
+      expect(new Set(recovered)).toEqual(
+        new Set(
+          priorIds
+            .filter((id) => id !== revoke)
+            .concat(mode === 'displace' ? ['t1-m21'] : []),
+        ),
+      );
+      expect(hook.result.current.missingMessageIds).toEqual(
+        revoke ? [revoke] : [],
+      );
+      return locations;
+    };
+
+    it('relocates two full windows in two locations', async () => {
+      expect((await recover('relocate', [20, 20])).length).toBeLessThanOrEqual(
+        2,
+      );
+    });
+    it('relocates newest and loaded older pages in at most two locations', async () => {
+      expect(
+        (await recover('relocate', [40], undefined, true)).length,
+      ).toBeLessThanOrEqual(2);
+    });
+    it('locates only displaced replies from a moving tail', async () => {
+      expect((await recover('displace', [20])).length).toBeLessThanOrEqual(1);
+    });
+    it('rebases two covered windows with one lookup and keeps each reading anchor', async () => {
+      const { hook, requests } = setup();
+      await respond(requests.shift()!, cards(['t1'], 'old'));
+      act(() => {
+        void hook.result.current.openCard(
+          hook.result.current.segments[0].id,
+          't1',
+        );
+      });
+      await waitFor(() => expect(requests).toHaveLength(1));
+      await respond(requests.shift()!, {
+        myahInboxContactEmailCardMessages: shaped('t1', 20),
+      });
+      const firstId = hook.result.current.windows[0].id;
+      act(() => {
+        void hook.result.current.locateMessage('t1-m1');
+      });
+      await waitFor(() => expect(requests).toHaveLength(1));
+      await respond(requests.shift()!, {
+        myahInboxContactEmailMessageLocation: {
+          messageId: 't1-m1',
+          card: card('t1'),
+          page: shaped('t1', 20, 't1-m1'),
+        },
+      });
+      const secondId = hook.result.current.windows[1].id;
+      act(() => {
+        void hook.result.current.rebase();
+      });
+      await waitFor(() => expect(requests).toHaveLength(1));
+      await respond(requests.shift()!, cards(['t1'], 'fresh'));
+      await waitFor(() => expect(requests).toHaveLength(1));
+      await respond(requests.shift()!, {
+        myahInboxContactEmailCard: { snapshot: 'fresh', card: card('t1') },
+      });
+      await waitFor(() => expect(requests).toHaveLength(1));
+      expect(requests[0].variables.messageId).toBe('t1-m20');
+      await respond(requests.shift()!, {
+        myahInboxContactEmailMessageLocation: {
+          messageId: 't1-m20',
+          card: card('t1'),
+          page: shaped('t1', 20, 't1-m20'),
+        },
+      });
+      expect(requests).toHaveLength(0);
+      expect(hook.result.current.windows).toHaveLength(2);
+      expect(
+        hook.result.current.windows.find(({ id }) => id === firstId)?.snapshot,
+      ).toBe('fresh');
+      expect(
+        hook.result.current.windows.find(({ id }) => id === secondId)
+          ?.anchorMessageId,
+      ).toBe('t1-m1');
+    });
+    for (const mode of ['rebase', 'relocate', 'root-change'] as const) {
+      it(`keeps a partially covered reading anchor inside its original window after ${mode}`, async () => {
+        const { hook, requests } = setup();
+        const rootChange = mode === 'root-change';
+        const initialTotal = rootChange ? 20 : 40;
+        const anchor = rootChange ? 't1-m15' : 't1-m30';
+        const currentCard = rootChange
+          ? { ...card('t1'), rootMessageId: 'new-root' }
+          : card('t1');
+        const priorRoot = shaped('t1', 20).root;
+        const currentPage = (total: number, target?: string) => {
+          const page = shaped('t1', total, target);
+          if (!rootChange) return page;
+          return {
+            ...page,
+            root: {
+              ...priorRoot,
+              id: 'new-root',
+              direction: 'OUTGOING',
+              receivedAt: '2026-08-30T00:00:00.000Z',
+            },
+            ...(target === priorRoot.id
+              ? {
+                  messages: [priorRoot],
+                  olderCursor: null,
+                  newerCursor: 'newer-root',
+                }
+              : target === 't1-m20'
+                ? { olderCursor: 'older-root' }
+                : {}),
+          };
+        };
+        await respond(requests.shift()!, cards(['t1'], 'old'));
+        act(() => {
+          void hook.result.current.openCard(
+            hook.result.current.segments[0].id,
+            't1',
+          );
+        });
+        await waitFor(() => expect(requests).toHaveLength(1));
+        await respond(requests.shift()!, {
+          myahInboxContactEmailCardMessages: shaped('t1', initialTotal),
+        });
+        act(() => {
+          void hook.result.current.locateMessage(anchor);
+        });
+        await waitFor(() => expect(requests).toHaveLength(1));
+        await respond(requests.shift()!, {
+          myahInboxContactEmailMessageLocation: {
+            messageId: anchor,
+            card: card('t1'),
+            page: shaped('t1', initialTotal, anchor),
+          },
+        });
+        const originalId = hook.result.current.windows[1].id;
+        act(() => {
+          void (mode === 'rebase'
+            ? hook.result.current.rebase()
+            : hook.result.current.ambientRefresh());
+        });
+        const locations: string[] = [];
+        for (let guard = 0; guard < 30; guard++) {
+          await waitFor(() =>
+            expect(
+              requests.length > 0 ||
+                (hook.result.current.status === 'ready' &&
+                  !hook.result.current.loading &&
+                  locations.length > 0),
+            ).toBe(true),
+          );
+          if (!requests.length) break;
+          const request = requests.shift()!;
+          if (request.name === 'MyahInboxContactEmailCard') {
+            await respond(request, {
+              myahInboxContactEmailCard: {
+                snapshot: 'fresh',
+                card: currentCard,
+              },
+            });
+          } else if (request.name === 'MyahInboxContactEmailCards') {
+            if (
+              (mode === 'relocate' || rootChange) &&
+              request.variables.snapshot === 'old'
+            )
+              await act(async () =>
+                request.partial(
+                  { myahInboxContactEmailCards: null },
+                  'Inbox history changed; reload history',
+                ),
+              );
+            else {
+              const list = cards(['t1'], 'fresh');
+              if (rootChange) {
+                list.myahInboxContactEmailCards.cards = [currentCard];
+                expect(
+                  list.myahInboxContactEmailCards.cards[0].rootMessageId,
+                ).toBe('new-root');
+              }
+              await respond(request, list);
+            }
+          } else if (request.name === 'MyahInboxContactEmailCardMessages') {
+            if (mode === 'relocate')
+              await act(async () =>
+                request.partial(
+                  { myahInboxContactEmailCardMessages: null },
+                  'Inbox history changed; reload history',
+                ),
+              );
+            else {
+              const result = currentPage(rootChange ? 40 : 20);
+              if (rootChange) {
+                expect(result.root.id).toBe(currentCard.rootMessageId);
+                expect(result.messages).toHaveLength(20);
+                expect(
+                  result.messages.some(
+                    (message) => message.id === result.root.id,
+                  ),
+                ).toBe(false);
+              }
+              await respond(request, {
+                myahInboxContactEmailCardMessages: result,
+              });
+            }
+          } else if (request.name === 'MyahInboxContactEmailMessageLocation') {
+            const id = request.variables.messageId as string;
+            if (mode === 'relocate' && request.variables.snapshot === 'old')
+              await act(async () =>
+                request.partial(
+                  { myahInboxContactEmailMessageLocation: null },
+                  'Inbox history changed; reload history',
+                ),
+              );
+            else {
+              const location = {
+                messageId: id,
+                card: currentCard,
+                page: currentPage(40, id),
+              };
+              if (rootChange) {
+                expect(location.card.rootMessageId).toBe('new-root');
+                expect(location.page.root.id).toBe(location.card.rootMessageId);
+                expect(
+                  location.page.messages.some(
+                    (message) => message.id === location.page.root.id,
+                  ),
+                ).toBe(false);
+                expect(
+                  location.page.messages.some((message) => message.id === id),
+                ).toBe(true);
+              }
+              locations.push(id);
+              await respond(request, {
+                myahInboxContactEmailMessageLocation: location,
+              });
+            }
+          }
+        }
+        expect(hook.result.current.status).toBe('ready');
+        expect(locations).toEqual(
+          rootChange ? ['t1-m20', 't1-root'] : ['t1-m40', 't1-m20'],
+        );
+        const windows = hook.result.current.windows;
+        const original = windows.find(({ id }) => id === originalId);
+        expect(original?.anchorMessageId).toBe(anchor);
+        expect(
+          original?.pages.some((p) =>
+            p.messages.some((message) => message.id === anchor),
+          ),
+        ).toBe(true);
+        expect(new Set(windows.map(({ id }) => id)).size).toBe(windows.length);
+        const recovered = windows.flatMap((window) =>
+          window.pages.flatMap((p) => p.messages.map((m) => m.id)),
+        );
+        expect(new Set(recovered)).toEqual(
+          new Set([
+            ...Array.from({ length: 40 }, (_, index) => `t1-m${index + 1}`),
+            ...(rootChange ? ['t1-root'] : []),
+          ]),
+        );
+        if (rootChange) {
+          expect(recovered).toContain('t1-root');
+          expect(recovered).not.toContain('new-root');
+          expect(
+            windows.every(
+              (window) =>
+                window.card.rootMessageId === 'new-root' &&
+                window.pages.every((p) => p.root.id === 'new-root'),
+            ),
+          ).toBe(true);
+        }
+        expect(original?.pages.some((p) => p.messages.length === 20)).toBe(
+          true,
+        );
+        expect(windows.some((window) => window.id !== originalId)).toBe(true);
+        expect(windows.some((window) => window.newerCursor !== null)).toBe(
+          true,
+        );
+        expect(windows.some((window) => window.olderCursor !== null)).toBe(
+          true,
+        );
+      });
+    }
+    it('rebases 20 loaded replies in one location', async () => {
+      expect((await recover('rebase', [20])).length).toBeLessThanOrEqual(1);
+    });
+    it('reports a revoked loaded reply while recovering the rest', async () => {
+      expect(
+        (await recover('rebase', [20], 't1-m20')).length,
+      ).toBeLessThanOrEqual(2);
+    });
   });
 });

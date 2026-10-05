@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { GraphQLError } from 'graphql';
 import {
   ApolloClient,
   ApolloLink,
@@ -759,7 +760,7 @@ const resolveRebase = async () => {
       },
     });
   }
-  for (const messageId of ['t3-m8', 't4-m8', 't5-m8', 't5-m6', 't6-m8']) {
+  for (const messageId of ['t3-m9', 't4-m9', 't5-m9', 't5-m6', 't6-m9']) {
     const location = take('MyahInboxContactEmailMessageLocation');
     expect(location.variables).toMatchObject({
       messageId,
@@ -1016,4 +1017,608 @@ it('never restores a reading anchor from a mounted hidden reply', async () => {
   } finally {
     geometry.mockRestore();
   }
+});
+
+describe('background history with real paging', () => {
+  type Card = {
+    threadId: string;
+    anchorKey: string;
+    rootMessageId: string;
+    startTimestamp: string;
+    subject: string;
+    campaignLabel: string | null;
+    historyBasis: string;
+  };
+  const card = (threadId: string, anchorKey: string, day: number): Card => ({
+    threadId,
+    anchorKey,
+    rootMessageId: `${threadId}-root`,
+    startTimestamp: `2026-09-0${day}T00:00:00Z`,
+    subject: `Subject ${threadId}`,
+    campaignLabel: 'Campaign',
+    historyBasis: 'EARLIEST_AUTHORIZED_RETAINED',
+  });
+  const message = (id: string, threadId: string, minute: number) => ({
+    id,
+    messageThreadId: threadId,
+    receivedAt: new Date(Date.UTC(2026, 8, 10, 0, minute)).toISOString(),
+    subject: 'Reply subject',
+    text: `Body ${id}`,
+    direction: 'INCOMING',
+    visibility: 'FULL',
+    participants: [],
+    attachmentFileIds: [],
+  });
+  const replies = (threadId: string, first: number, last: number) =>
+    Array.from({ length: last - first + 1 }, (_, index) =>
+      message(`${threadId}-m${first + index}`, threadId, first + index),
+    );
+
+  // Mirrors the server: 20-reply pages, newest-first selection returned
+  // ascending, location pages END at the target message.
+  type Thread = { card: Card; replies: ReturnType<typeof message>[] };
+  const pageFor = (thread: Thread, upTo?: string) => {
+    const end = upTo
+      ? thread.replies.findIndex(({ id }) => id === upTo) + 1
+      : thread.replies.length;
+    const start = Math.max(0, end - 20);
+    return {
+      threadId: thread.card.threadId,
+      anchorKey: thread.card.anchorKey,
+      root: message(thread.card.rootMessageId, thread.card.threadId, 0),
+      messages: thread.replies.slice(start, end),
+      olderCursor: start > 0 ? `older-${start}` : null,
+      newerCursor: end < thread.replies.length ? `newer-${end}` : null,
+    };
+  };
+
+  type Reply = { data: Record<string, unknown> } | { error: string };
+  let server: (name: string, variables: Record<string, unknown>) => Reply;
+  const counts = new Map<string, number>();
+
+  const Harness = ({
+    contactId = 'contact',
+    showHistory = true,
+  }: {
+    contactId?: string;
+    showHistory?: boolean;
+  }) => {
+    const history = useMyahInboxEmailHistory('workspace', contactId, 'member');
+    harnessHistory = history;
+    return (
+      <>
+        <textarea aria-label="Reply composer" defaultValue="" />
+        {showHistory && (
+          <MyahInboxEmailOutreachHistory
+            history={history}
+            onReply={jest.fn()}
+          />
+        )}
+      </>
+    );
+  };
+  let harnessHistory: ReturnType<typeof useMyahInboxEmailHistory>;
+
+  const settle = async () => {
+    for (let index = 0; index < 20; index++)
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+  };
+
+  let scrollIntoView: jest.Mock;
+  beforeEach(() => {
+    counts.clear();
+    scrollIntoView = jest.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    mockClient = new ApolloClient({
+      cache: new InMemoryCache(),
+      link: new ApolloLink(
+        (operation) =>
+          new Observable((observer) => {
+            const name = operation.operationName ?? '';
+            counts.set(name, (counts.get(name) ?? 0) + 1);
+            setTimeout(() => {
+              const reply = server(name, operation.variables);
+              if ('error' in reply)
+                observer.next({ errors: [new GraphQLError(reply.error)] });
+              else observer.next({ data: reply.data });
+              observer.complete();
+            }, 0);
+          }),
+      ),
+    });
+  });
+  afterEach(() => mockClient.stop());
+
+  const STALE = 'Inbox history changed; reload history';
+  const serve =
+    (threads: Thread[], snapshot: string, staleSnapshots: string[] = []) =>
+    (name: string, variables: Record<string, unknown>): Reply => {
+      if (staleSnapshots.includes(variables.snapshot as string))
+        return { error: STALE };
+      const byKey = (key: unknown) =>
+        threads.find(({ card }) => card.anchorKey === key);
+      switch (name) {
+        case 'MyahInboxContactEmailCards':
+          return {
+            data: {
+              myahInboxContactEmailCards: {
+                cards: threads.map(({ card }) => card),
+                snapshot,
+                olderCursor: null,
+                latestThreadId: threads.at(-1)!.card.threadId,
+              },
+            },
+          };
+        case 'MyahInboxContactEmailCard': {
+          const thread = byKey(variables.anchorKey);
+          return thread
+            ? {
+                data: {
+                  myahInboxContactEmailCard: { snapshot, card: thread.card },
+                },
+              }
+            : { error: 'Inbox card is not readable' };
+        }
+        case 'MyahInboxContactEmailCardMessages':
+          return {
+            data: {
+              myahInboxContactEmailCardMessages: pageFor(
+                byKey(variables.anchorKey)!,
+              ),
+            },
+          };
+        case 'MyahInboxContactEmailMessageLocation': {
+          const id = variables.messageId as string;
+          const thread = threads.find(
+            ({ card, replies }) =>
+              card.rootMessageId === id || replies.some((m) => m.id === id),
+          );
+          if (!thread)
+            return { data: { myahInboxContactEmailMessageLocation: null } };
+          return {
+            data: {
+              myahInboxContactEmailMessageLocation: {
+                messageId: id,
+                card: thread.card,
+                page: pageFor(
+                  thread,
+                  thread.card.rootMessageId === id ? undefined : id,
+                ),
+              },
+            },
+          };
+        }
+      }
+      throw new Error(`unexpected ${name}`);
+    };
+
+  const startTyping = () => {
+    const composer =
+      screen.getByLabelText<HTMLTextAreaElement>('Reply composer');
+    composer.focus();
+    composer.value = 'Hello, thanks for';
+    composer.setSelectionRange(7, 7);
+    return composer;
+  };
+  const observe = (container: HTMLElement, composer: HTMLTextAreaElement) => {
+    const active = document.activeElement as HTMLElement | null;
+    const observation = {
+      activeElement:
+        active === composer
+          ? 'composer'
+          : (active?.dataset.messageId ?? active?.tagName),
+      scrollIntoViewCalls: scrollIntoView.mock.calls.length,
+      expandedRegions: [
+        ...container.querySelectorAll<HTMLElement>('[id^="replies-"]'),
+      ]
+        .filter((region) => region.hidden === false)
+        .map((region) => region.id),
+      composerValue: composer.value,
+      composerCursor: composer.selectionStart,
+      locationQueries: counts.get('MyahInboxContactEmailMessageLocation') ?? 0,
+    };
+    return observation;
+  };
+
+  it('control: an ambient refresh with no change keeps composer focus', async () => {
+    const threads: Thread[] = [
+      { card: card('t3', 'legacy:t3', 3), replies: replies('t3', 1, 3) },
+      { card: card('t5', 'legacy:t5', 5), replies: replies('t5', 1, 2) },
+    ];
+    server = serve(threads, 'snapshot-1');
+    const { container } = render(<Harness />);
+    await settle();
+    const composer = startTyping();
+    await act(async () => {
+      expect(await harnessHistory.ambientRefresh()).toBe(true);
+    });
+    await settle();
+    expect(observe(container, composer)).toMatchObject({
+      activeElement: 'composer',
+      scrollIntoViewCalls: 0,
+      expandedRegions: ['replies-t5'],
+      composerValue: 'Hello, thanks for',
+      composerCursor: 7,
+    });
+  });
+
+  it('moving tail keeps a collapsed legacy card and composer unchanged', async () => {
+    const t3: Thread = {
+      card: card('t3', 'legacy:t3', 3),
+      replies: replies('t3', 1, 20),
+    };
+    const threads: Thread[] = [
+      t3,
+      { card: card('t5', 'legacy:t5', 5), replies: replies('t5', 1, 2) },
+    ];
+    server = serve(threads, 'snapshot-1');
+    const { container } = render(<Harness />);
+    await settle();
+    const composer = startTyping();
+    // New reply arrives; old-snapshot pages are not createdAt-frozen.
+    t3.replies.push(message('t3-m21', 't3', 21));
+    await act(async () => {
+      expect(await harnessHistory.ambientRefresh()).toBe(true);
+    });
+    await settle();
+    expect(
+      container.querySelector('[data-message-id="t3-m21"]'),
+    ).not.toBeNull();
+    expect(container.querySelector('[data-message-id="t3-m1"]')).not.toBeNull();
+    expect(observe(container, composer)).toMatchObject({
+      activeElement: 'composer',
+      scrollIntoViewCalls: 0,
+      expandedRegions: ['replies-t5'],
+      composerValue: 'Hello, thanks for',
+      composerCursor: 7,
+    });
+  });
+
+  it('skips a covered location request across windows on successive moving-tail ticks', async () => {
+    const older: Thread = {
+      card: card('t3', 'legacy:t3', 3),
+      replies: replies('t3', 1, 20),
+    };
+    const newer: Thread = {
+      card: card('t5', 'legacy:t5', 5),
+      replies: replies('t5', 1, 2),
+    };
+    server = serve([older, newer], 'old');
+    const { container } = render(<Harness />);
+    await settle();
+    const composer = startTyping();
+    older.replies.push(message('t3-m21', 't3', 21));
+    await act(async () => {
+      expect(await harnessHistory.ambientRefresh()).toBe(true);
+    });
+    await settle();
+    expect(
+      harnessHistory.windows
+        .flatMap((w) => w.requests)
+        .some((r) => r.messageId === 't3-m1'),
+    ).toBe(true);
+    counts.clear();
+    older.replies.push(message('t3-m22', 't3', 22));
+    await act(async () => {
+      expect(await harnessHistory.ambientRefresh()).toBe(true);
+    });
+    await settle();
+    expect(counts.get('MyahInboxContactEmailMessageLocation')).toBe(1);
+    const gaps = () =>
+      within(screen.getByLabelText('Replies for Subject t3')).getAllByRole(
+        'button',
+        { name: 'Load newer replies for Subject t3', hidden: true },
+      );
+    expect(gaps()).toHaveLength(1);
+    expect(gaps()[0]).toBeEnabled();
+    expect(
+      container.querySelectorAll('[data-message-id="t3-m1"]'),
+    ).toHaveLength(1);
+    expect(
+      container.querySelectorAll('[data-message-id="t3-m2"]'),
+    ).toHaveLength(1);
+    expect(
+      container.querySelectorAll('[data-message-id="t3-m22"]'),
+    ).toHaveLength(1);
+    counts.clear();
+    older.replies.push(message('t3-m23', 't3', 23));
+    await act(async () => {
+      expect(await harnessHistory.ambientRefresh()).toBe(true);
+    });
+    await settle();
+    expect(counts.get('MyahInboxContactEmailMessageLocation')).toBe(1);
+    expect(gaps()).toHaveLength(1);
+    expect(gaps()[0]).toBeEnabled();
+    for (const id of ['t3-m1', 't3-m2', 't3-m21', 't3-m22', 't3-m23'])
+      expect(
+        container.querySelectorAll(`[data-message-id="${id}"]`),
+      ).toHaveLength(1);
+    expect(observe(container, composer)).toMatchObject({
+      activeElement: 'composer',
+      composerValue: 'Hello, thanks for',
+      composerCursor: 7,
+      expandedRegions: ['replies-t5'],
+      scrollIntoViewCalls: 0,
+    });
+  });
+
+  it('THREAD promotion preserves composer focus and a collapsed sibling', async () => {
+    const promoted: Thread = {
+      card: card('t3', 'thread:t3', 3),
+      replies: replies('t3', 1, 20),
+    };
+    const sibling: Thread = {
+      card: card('t5', 'attempt:sibling', 5),
+      replies: replies('t5', 1, 2),
+    };
+    server = serve([promoted, sibling], 'snapshot-1');
+    const { container } = render(<Harness />);
+    await settle();
+    const composer = startTyping();
+    counts.clear();
+    // THREAD group gains its accepted-send parent: key changes, the contact
+    // fingerprint changes, so every snapshot-1 read is rejected as stale.
+    const exact: Thread = {
+      card: { ...promoted.card, anchorKey: 'attempt:one' },
+      replies: promoted.replies,
+    };
+    server = serve([exact, sibling], 'fresh', ['snapshot-1']);
+    await act(async () => {
+      expect(await harnessHistory.ambientRefresh()).toBe(true);
+    });
+    await settle();
+    const observation = observe(container, composer);
+    expect(observation).toMatchObject({
+      activeElement: 'composer',
+      scrollIntoViewCalls: 0,
+      expandedRegions: ['replies-attempt:sibling'],
+      composerValue: 'Hello, thanks for',
+      composerCursor: 7,
+    });
+  });
+
+  it('recovers two 20-reply cards with at most two locations', async () => {
+    const promoted: Thread = {
+      card: card('t3', 'thread:t3', 3),
+      replies: replies('t3', 1, 20),
+    };
+    const sibling: Thread = {
+      card: card('t5', 'attempt:sibling', 5),
+      replies: replies('t5', 1, 20),
+    };
+    server = serve([promoted, sibling], 'snapshot-1');
+    const { container } = render(<Harness />);
+    await settle();
+    const composer = startTyping();
+    counts.clear();
+    server = serve(
+      [
+        {
+          card: { ...promoted.card, anchorKey: 'attempt:one' },
+          replies: promoted.replies,
+        },
+        sibling,
+      ],
+      'fresh',
+      ['snapshot-1'],
+    );
+    await act(async () => {
+      expect(await harnessHistory.ambientRefresh()).toBe(true);
+    });
+    await settle();
+    const { locationQueries } = observe(container, composer);
+    expect(locationQueries).toBeLessThanOrEqual(2);
+    expect(
+      new Set(
+        [
+          ...container.querySelectorAll(
+            '[data-thread-id="t3"] [data-message-id], [data-thread-id="t5"] [data-message-id]',
+          ),
+        ].map((node) => node.getAttribute('data-message-id')),
+      ),
+    ).toEqual(
+      new Set([
+        't3-root',
+        't5-root',
+        ...replies('t3', 1, 20).map(({ id }) => id),
+        ...replies('t5', 1, 20).map(({ id }) => id),
+      ]),
+    );
+    expect(
+      harnessHistory.windows.every(({ snapshot }) => snapshot === 'fresh'),
+    ).toBe(true);
+  });
+
+  it('resolves a PENDING root without moving the composer or opening a collapsed sibling', async () => {
+    const pending: Thread = {
+      card: {
+        ...card('t3', 'attempt:one', 3),
+        rootMessageId: 't3-reply',
+        historyBasis: 'PENDING',
+      },
+      replies: replies('t3', 1, 20),
+    };
+    const sibling: Thread = {
+      card: card('t5', 'attempt:sibling', 5),
+      replies: replies('t5', 1, 2),
+    };
+    server = serve([pending, sibling], 'old');
+    const { container } = render(<Harness />);
+    await settle();
+    const composer = startTyping();
+    pending.card = {
+      ...pending.card,
+      rootMessageId: 't3-send',
+      historyBasis: 'EARLIEST_AUTHORIZED_RETAINED',
+    };
+    server = serve([pending, sibling], 'fresh', ['old']);
+    await act(async () => {
+      expect(await harnessHistory.ambientRefresh()).toBe(true);
+    });
+    await settle();
+    expect(
+      container.querySelector('[data-message-id="t3-send"]'),
+    ).not.toBeNull();
+    expect(container.querySelector('[data-message-id="t3-m1"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-message-id="t3-m20"]'),
+    ).not.toBeNull();
+    expect(
+      harnessHistory.windows.every(({ snapshot }) => snapshot === 'fresh'),
+    ).toBe(true);
+    expect(observe(container, composer)).toMatchObject({
+      activeElement: 'composer',
+      composerValue: 'Hello, thanks for',
+      composerCursor: 7,
+      expandedRegions: ['replies-attempt:sibling'],
+      scrollIntoViewCalls: 0,
+    });
+  });
+
+  it('does not reveal recovered replies when the composer is not focused', async () => {
+    const older: Thread = {
+      card: card('t3', 'legacy:t3', 3),
+      replies: replies('t3', 1, 20),
+    };
+    server = serve(
+      [
+        older,
+        { card: card('t5', 'legacy:t5', 5), replies: replies('t5', 1, 2) },
+      ],
+      'old',
+    );
+    const { container } = render(<Harness />);
+    await settle();
+    const composer = startTyping();
+    composer.blur();
+    older.replies.push(message('t3-m21', 't3', 21));
+    await act(async () => {
+      expect(await harnessHistory.ambientRefresh()).toBe(true);
+    });
+    await settle();
+    expect(observe(container, composer)).toMatchObject({
+      activeElement: 'BODY',
+      expandedRegions: ['replies-t5'],
+      scrollIntoViewCalls: 0,
+      composerValue: 'Hello, thanks for',
+      composerCursor: 7,
+    });
+  });
+
+  it('masks a failed background reauthorization without stealing focus', async () => {
+    const thread: Thread = {
+      card: card('t5', 'legacy:t5', 5),
+      replies: replies('t5', 1, 2),
+    };
+    server = serve([thread], 'old');
+    const { container } = render(<Harness />);
+    await settle();
+    const composer = startTyping();
+    server = () => ({ error: 'Forbidden' });
+    await act(async () => {
+      expect(await harnessHistory.ambientRefresh()).toBe(false);
+    });
+    expect(harnessHistory.status).toBe('needs-rebase');
+    expect(observe(container, composer)).toMatchObject({
+      activeElement: 'composer',
+      composerValue: 'Hello, thanks for',
+      composerCursor: 7,
+      scrollIntoViewCalls: 0,
+    });
+  });
+
+  it('reveals only an explicit location once, not after ambient or masked refresh', async () => {
+    const thread: Thread = {
+      card: card('t5', 'legacy:t5', 5),
+      replies: replies('t5', 1, 2),
+    };
+    server = serve([thread], 'old');
+    const { container } = render(<Harness />);
+    await settle();
+    const composer = startTyping();
+    await act(async () => {
+      await harnessHistory.locateMessage('t5-m2');
+    });
+    await settle();
+    expect(container.querySelector('[data-message-id="t5-m2"]')).toHaveFocus();
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    composer.focus();
+    server = serve([thread], 'fresh', ['old']);
+    await act(async () => {
+      expect(await harnessHistory.ambientRefresh()).toBe(true);
+    });
+    await settle();
+    expect(composer).toHaveFocus();
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await harnessHistory.refresh();
+    });
+    await settle();
+    expect(composer).toHaveFocus();
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not reveal an old location on panel remount but reveals a later locate', async () => {
+    const thread: Thread = {
+      card: card('t5', 'legacy:t5', 5),
+      replies: replies('t5', 1, 3),
+    };
+    server = serve([thread], 'old');
+    const view = render(<Harness />);
+    await settle();
+    const composer = startTyping();
+    await act(async () => {
+      await harnessHistory.locateMessage('t5-m2');
+    });
+    await settle();
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    view.rerender(<Harness showHistory={false} />);
+    composer.focus();
+    view.rerender(<Harness />);
+    await settle();
+    expect(composer).toHaveFocus();
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await harnessHistory.locateMessage('t5-m3');
+    });
+    await settle();
+    expect(scrollIntoView).toHaveBeenCalledTimes(2);
+    expect(
+      view.container.querySelector('[data-message-id="t5-m3"]'),
+    ).toHaveFocus();
+  });
+
+  it('does not focus for an unavailable location or replay it on contact return', async () => {
+    const thread: Thread = {
+      card: card('t5', 'legacy:t5', 5),
+      replies: replies('t5', 1, 2),
+    };
+    server = serve([thread], 'old');
+    const view = render(<Harness />);
+    await settle();
+    const composer = startTyping();
+    await act(async () => {
+      await harnessHistory.locateMessage('missing');
+    });
+    expect(harnessHistory.locationMissing).toBe(true);
+    expect(composer).toHaveFocus();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    await act(async () => {
+      await harnessHistory.locateMessage('t5-m2');
+    });
+    await settle();
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    composer.focus();
+    view.rerender(<Harness contactId="another" />);
+    await settle();
+    view.rerender(<Harness />);
+    await settle();
+    expect(composer).toHaveFocus();
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  });
 });

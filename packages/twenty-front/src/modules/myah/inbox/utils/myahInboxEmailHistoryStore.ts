@@ -64,6 +64,7 @@ export type MyahInboxEmailHistoryState = {
   segments: MyahInboxEmailCardSegment[];
   windows: MyahInboxEmailMessageWindow[];
   locationMissing: boolean;
+  reveal: { id: number; anchorKey: string; messageId: string } | null;
   detachedCards: { snapshot: string; card: MyahInboxEmailCardFieldsFragment }[];
   historyRebased: boolean;
   // One initial page plus each successfully committed explicit card page.
@@ -108,6 +109,7 @@ export class MyahInboxEmailHistoryStore {
     segments: [],
     windows: [],
     locationMissing: false,
+    reveal: null,
     detachedCards: [],
     historyRebased: false,
     cardPageBudget: 1,
@@ -256,14 +258,29 @@ export class MyahInboxEmailHistoryStore {
     restored: MyahInboxEmailMessageWindow[],
     missingMessageIds: string[],
   ) {
+    const relocatedByGroup = new Map<string, MyahInboxEmailMessageWindow[]>();
     for (const window of windows) {
-      const covered = new Set<string>();
-      let first = true;
-      for (const messageId of [
-        ...(window.anchorMessageId ? [window.anchorMessageId] : []),
-        ...window.messageIds,
-      ]) {
-        if (covered.has(messageId)) continue;
+      const shared = [
+        ...restored.filter(
+          (next) =>
+            groupId(next.card) === groupId(window) &&
+            next.snapshot === snapshot,
+        ),
+        ...(relocatedByGroup.get(groupId(window)) ?? []),
+      ];
+      const covered = new Set<string>(
+        shared.flatMap((next) =>
+          next.pages.flatMap((page) =>
+            [page.root, ...page.messages].map(
+              (message) => message.id as string,
+            ),
+          ),
+        ),
+      );
+      const relocated: MyahInboxEmailMessageWindow[] = [];
+      for (const messageId of window.messageIds) {
+        if (covered.has(messageId) || missingMessageIds.includes(messageId))
+          continue;
         const location = await this.queryLocation(signal, messageId, snapshot);
         if (!location || location.card.threadId !== window.threadId) {
           missingMessageIds.push(messageId);
@@ -272,14 +289,56 @@ export class MyahInboxEmailHistoryStore {
         const next = this.window(location.card, snapshot, location.page, {
           messageId,
         });
-        if (first) {
-          next.id = window.id;
-          first = false;
-        }
-        restored.push(next);
+        relocated.push(next);
         for (const message of [location.page.root, ...location.page.messages])
           covered.add(message.id as string);
       }
+      if (window.messageIds.length) {
+        const target = window.anchorMessageId ?? window.messageIds[0];
+        if (
+          !relocated.some((next) =>
+            next.pages.some((page) =>
+              [page.root, ...page.messages].some(
+                (message) => message.id === target,
+              ),
+            ),
+          )
+        ) {
+          const source = shared.find((next) =>
+            next.pages.some((page) =>
+              [page.root, ...page.messages].some(
+                (message) => message.id === target,
+              ),
+            ),
+          );
+          const page = source?.pages.find((page) =>
+            [page.root, ...page.messages].some(
+              (message) => message.id === target,
+            ),
+          );
+          if (source && page)
+            relocated.push(
+              this.window(source.card, snapshot, page, { messageId: target }),
+            );
+        }
+      }
+      const anchored = relocated.find((next) =>
+        next.pages.some((page) =>
+          [page.root, ...page.messages].some(
+            (message) => message.id === window.anchorMessageId,
+          ),
+        ),
+      );
+      const primary = anchored ?? relocated[0];
+      if (primary !== undefined) {
+        primary.id = window.id;
+        primary.anchorMessageId = anchored ? window.anchorMessageId : null;
+      }
+      restored.push(...relocated);
+      relocatedByGroup.set(groupId(window), [
+        ...(relocatedByGroup.get(groupId(window)) ?? []),
+        ...relocated,
+      ]);
     }
   }
   private window(
@@ -509,6 +568,9 @@ export class MyahInboxEmailHistoryStore {
       return {
         ...this.state,
         locationMissing: !location,
+        reveal: location
+          ? { id: ++this.nextId, anchorKey: location.card.anchorKey, messageId }
+          : this.state.reveal,
         windows: location
           ? [
               ...this.state.windows,
@@ -623,14 +685,20 @@ export class MyahInboxEmailHistoryStore {
           requests,
           anchorMessageId,
           messageIds: [
-            ...new Set<string>(
+            ...new Map(
               pages.flatMap((page) =>
                 [...page.messages, page.root].map(
-                  (message) => message.id as string,
+                  (message) => [message.id, message] as const,
                 ),
               ),
-            ),
-          ],
+            ).values(),
+          ]
+            .sort(
+              (a, b) =>
+                b.receivedAt.localeCompare(a.receivedAt) ||
+                String(b.id).localeCompare(String(a.id)),
+            )
+            .map((message) => message.id as string),
         }),
       ),
     };
@@ -739,18 +807,26 @@ export class MyahInboxEmailHistoryStore {
     const windows: MyahInboxEmailMessageWindow[] = [];
     const missingMessageIds: string[] = [];
     const staleWindows: ReplayPlan['windows'] = [];
+    const coveredPages = new Map<
+      string,
+      MyahInboxEmailMessagePageFieldsFragment[]
+    >();
     for (const window of plan.windows) {
       const card = projections.get(groupId(window))?.card;
       if (!card) continue;
       const changed = card.rootMessageId !== window.rootMessageId;
       const snapshot = changed ? recoveryFresh!.snapshot : window.snapshot;
       const restored: MyahInboxEmailMessageWindow[] = [];
+      const key = `${groupId(window)}\u0000${snapshot}`;
+      const groupPages = coveredPages.get(key) ?? [];
+      coveredPages.set(key, groupPages);
       const covered = new Set<string>();
       const retain = (
         page: MyahInboxEmailMessagePageFieldsFragment,
         request: MessageRequest,
       ) => {
         restored.push(this.window(card, snapshot, page, request));
+        groupPages.push(page);
         for (const message of [page.root, ...page.messages])
           covered.add(message.id as string);
       };
@@ -767,16 +843,25 @@ export class MyahInboxEmailHistoryStore {
           retain(page, {});
         }
         for (const request of changed ? [] : window.requests) {
-          const page = request.messageId
-            ? (await this.queryLocation(signal, request.messageId, snapshot))
-                ?.page
-            : await this.queryMessages(
-                signal,
-                window.threadId,
-                snapshot,
-                request.cursor,
-                window.anchorKey,
-              );
+          const shared = request.messageId
+            ? groupPages.find((page) =>
+                [page.root, ...page.messages].some(
+                  (message) => message.id === request.messageId,
+                ),
+              )
+            : undefined;
+          const page =
+            shared ??
+            (request.messageId
+              ? (await this.queryLocation(signal, request.messageId, snapshot))
+                  ?.page
+              : await this.queryMessages(
+                  signal,
+                  window.threadId,
+                  snapshot,
+                  request.cursor,
+                  window.anchorKey,
+                ));
           if (!page) {
             if (request.messageId) missingMessageIds.push(request.messageId);
             continue;
@@ -785,13 +870,17 @@ export class MyahInboxEmailHistoryStore {
           // longer touch, so each keeps both navigable frontiers independently.
           retain(page, request);
         }
-        // Restore only displaced displayed IDs, anchor first. Location pages
-        // end at their target, so visit the remaining IDs newest-first.
-        for (const messageId of [
-          ...(window.anchorMessageId ? [window.anchorMessageId] : []),
-          ...[...window.messageIds].reverse(),
-        ]) {
-          if (covered.has(messageId) || missingMessageIds.includes(messageId))
+        // Location pages end at their target; newest-first covers older IDs.
+        for (const messageId of window.messageIds) {
+          if (
+            covered.has(messageId) ||
+            missingMessageIds.includes(messageId) ||
+            groupPages.some((page) =>
+              [page.root, ...page.messages].some(
+                (message) => message.id === messageId,
+              ),
+            )
+          )
             continue;
           const location = await this.queryLocation(
             signal,
@@ -804,13 +893,26 @@ export class MyahInboxEmailHistoryStore {
           }
           retain(location.page, { messageId });
         }
-        const anchored = restored.find((next) =>
+        let anchored = restored.find((next) =>
           next.pages.some((page) =>
             [page.root, ...page.messages].some(
               (message) => message.id === window.anchorMessageId,
             ),
           ),
         );
+        if (!anchored && window.anchorMessageId) {
+          const page = groupPages.find((page) =>
+            [page.root, ...page.messages].some(
+              (message) => message.id === window.anchorMessageId,
+            ),
+          );
+          if (page) {
+            anchored = this.window(card, snapshot, page, {
+              messageId: window.anchorMessageId,
+            });
+            restored.push(anchored);
+          }
+        }
         const primary = anchored ?? restored.at(0);
         if (primary) {
           primary.id = window.id;
@@ -823,6 +925,7 @@ export class MyahInboxEmailHistoryStore {
         // previously loaded IDs against a fresh authorized snapshot.
         if (!changed && isStaleHistorySnapshot(error)) {
           missingMessageIds.length = missingBefore;
+          groupPages.length -= restored.length;
           staleWindows.push(window);
           continue;
         }
@@ -965,17 +1068,25 @@ export class MyahInboxEmailHistoryStore {
       );
       const windows: MyahInboxEmailMessageWindow[] = [];
       const missingMessageIds: string[] = [];
+      const recoveredByGroup = new Map<string, MyahInboxEmailMessageWindow[]>();
       for (const window of plan.windows) {
         if (!projections.get(groupId(window))?.card) continue;
-        const covered = new Set<string>();
-        let restored = false;
+        const shared = recoveredByGroup.get(groupId(window)) ?? [];
+        const covered = new Set<string>(
+          shared.flatMap((next) =>
+            next.pages.flatMap((page) =>
+              [page.root, ...page.messages].map(
+                (message) => message.id as string,
+              ),
+            ),
+          ),
+        );
+        const restoredStart = windows.length;
         // Re-locate only previously displayed IDs, never crawl intervening history.
         // Non-overlapping locations remain independent windows with explicit gaps.
-        for (const messageId of [
-          ...(window.anchorMessageId ? [window.anchorMessageId] : []),
-          ...window.messageIds,
-        ]) {
-          if (covered.has(messageId)) continue;
+        for (const messageId of window.messageIds) {
+          if (covered.has(messageId) || missingMessageIds.includes(messageId))
+            continue;
           const location = await this.queryLocation(
             signal,
             messageId,
@@ -991,15 +1102,48 @@ export class MyahInboxEmailHistoryStore {
             location.page,
             { messageId },
           );
-          if (!restored) {
-            next.id = window.id;
-            restored = true;
-          }
           windows.push(next);
           for (const message of [location.page.root, ...location.page.messages])
             covered.add(message.id as string);
         }
-        if (!restored && !window.messageIds.length && !window.anchorMessageId) {
+        if (window.messageIds.length) {
+          const target = window.anchorMessageId ?? window.messageIds[0];
+          if (
+            !windows
+              .slice(restoredStart)
+              .some((next) =>
+                next.pages.some((page) =>
+                  [page.root, ...page.messages].some(
+                    (message) => message.id === target,
+                  ),
+                ),
+              )
+          ) {
+            const source = shared.find((next) =>
+              next.pages.some((page) =>
+                [page.root, ...page.messages].some(
+                  (message) => message.id === target,
+                ),
+              ),
+            );
+            const page = source?.pages.find((page) =>
+              [page.root, ...page.messages].some(
+                (message) => message.id === target,
+              ),
+            );
+            if (source && page)
+              windows.push(
+                this.window(source.card, fresh.snapshot, page, {
+                  messageId: target,
+                }),
+              );
+          }
+        }
+        if (
+          windows.length === restoredStart &&
+          !window.messageIds.length &&
+          !window.anchorMessageId
+        ) {
           const projection = projections.get(groupId(window))!;
           const page = await this.queryMessages(
             signal,
@@ -1008,11 +1152,22 @@ export class MyahInboxEmailHistoryStore {
             undefined,
             window.anchorKey,
           );
-          windows.push({
-            ...this.window(projection.card!, fresh.snapshot, page, {}),
-            id: window.id,
-          });
+          windows.push(this.window(projection.card!, fresh.snapshot, page, {}));
         }
+        const restored = windows.slice(restoredStart);
+        const anchored = restored.find((next) =>
+          next.pages.some((page) =>
+            [page.root, ...page.messages].some(
+              (message) => message.id === window.anchorMessageId,
+            ),
+          ),
+        );
+        const primary = anchored ?? restored[0];
+        if (primary !== undefined) {
+          primary.id = window.id;
+          primary.anchorMessageId = anchored ? window.anchorMessageId : null;
+        }
+        recoveredByGroup.set(groupId(window), [...shared, ...restored]);
       }
       await this.relocateWindows(
         signal,
@@ -1053,6 +1208,7 @@ export class MyahInboxEmailHistoryStore {
       detachedCards: [],
       missingMessageIds: [],
       locationMissing: false,
+      reveal: null,
       historyRebased: false,
       cardPageBudget: 1,
       status: 'masked',
