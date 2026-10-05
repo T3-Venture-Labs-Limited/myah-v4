@@ -23,6 +23,9 @@ let mockObjectMetadataItems = [
   { id: 'account', nameSingular: 'myahInstagramAccount' },
   { id: 'draft', nameSingular: 'myahInstagramReplyDraft' },
   { id: 'creator', nameSingular: 'creator' },
+  { id: 'workflow', nameSingular: 'workflow' },
+  { id: 'workflowRun', nameSingular: 'workflowRun' },
+  { id: 'workflowVersion', nameSingular: 'workflowVersion' },
 ];
 jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue', () => ({
   useAtomStateValue: (state: unknown) => {
@@ -318,4 +321,40 @@ it('hides "Import Creator Lists" on the Creator Lists page (MYAH-457)', () => {
   expect(
     screen.getAllByRole('button').map((button) => button.textContent),
   ).toEqual(['Export View']);
+});
+
+it('hides navigation to Automations, runs and versions (MYAH-460)', () => {
+  mockItems = [
+    ['Go to Workflows', 'workflow'],
+    ['Go to Workflow runs', 'workflowRun'],
+    ['Go to Workflow versions', 'workflowVersion'],
+    ['Go to Creators', 'creator'],
+  ].map(([label, objectMetadataItemId], index) => ({
+    ...item(label, index),
+    engineComponentKey: EngineComponentKey.NAVIGATION,
+    payload: {
+      __typename: 'ObjectMetadataCommandMenuItemPayload',
+      objectMetadataItemId,
+    },
+  })) as CommandMenuItemFieldsFragment[];
+  render(
+    <I18nProvider i18n={i18n}>
+      <CommandMenuContextProviderContent
+        displayType="listItem"
+        containerType="command-menu-list"
+        commandMenuContextApi={{
+          ...EMPTY_COMMAND_MENU_CONTEXT_API,
+          pageType: ContextStorePageType.Index,
+          objectMetadataItem: { id: 'creator', nameSingular: 'creator' },
+        }}
+        isInPreviewMode={false}
+      >
+        <SidePanelCommandMenuItemDisplayPage />
+      </CommandMenuContextProviderContent>
+    </I18nProvider>,
+  );
+
+  expect(
+    screen.getAllByRole('button').map((button) => button.textContent),
+  ).toEqual(['Go to Creators']);
 });

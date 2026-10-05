@@ -1,3 +1,4 @@
+import { MYAH_HIDDEN_OBJECT_NAME_SINGULARS } from '@/myah/navigation/constants/MyahHiddenObjectNameSingulars';
 import { useMemo } from 'react';
 import { isDefined } from 'twenty-shared/utils';
 
@@ -18,12 +19,19 @@ export const useSearchableObjectNameSingulars = ({
   );
 
   return useMemo(() => {
-    if (isDefined(selectedObjectNameSingular)) {
+    if (
+      isDefined(selectedObjectNameSingular) &&
+      !MYAH_HIDDEN_OBJECT_NAME_SINGULARS.includes(selectedObjectNameSingular)
+    ) {
       return [selectedObjectNameSingular];
     }
 
     return readableObjectMetadataItems
       .filter((item) => sidePanelShowHiddenObjects || item.isSearchable)
+      .filter(
+        (item) =>
+          !MYAH_HIDDEN_OBJECT_NAME_SINGULARS.includes(item.nameSingular),
+      )
       .map((item) => item.nameSingular);
   }, [
     readableObjectMetadataItems,
