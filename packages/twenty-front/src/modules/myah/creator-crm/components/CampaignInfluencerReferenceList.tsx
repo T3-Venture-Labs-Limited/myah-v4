@@ -1,3 +1,4 @@
+import { useTextFieldFocusProps } from '@/ui/utilities/focus/hooks/useTextFieldFocusProps';
 import { useQuery } from '@apollo/client/react';
 import { useListenToObjectRecordOperationBrowserEvent } from '@/browser-event/hooks/useListenToObjectRecordOperationBrowserEvent';
 import { type ObjectRecordOperation } from '@/object-record/types/ObjectRecordOperation';
@@ -222,6 +223,7 @@ export const CampaignInfluencerReferenceList = ({
   stageOptions: Array<{ value: string; label: string }>;
   onOpenCreatorContext?: (request: RecordIndexOpenRequest) => void;
 }) => {
+  const textFieldFocus = useTextFieldFocusProps();
   const [search, setSearch] = useState('');
   const [needReviewOnly, setNeedReviewOnly] = useState(false);
   const agentReview = useQuery<MyahReplyAgentReviewData>(
@@ -414,6 +416,8 @@ export const CampaignInfluencerReferenceList = ({
     <StyledList aria-label="Campaign influencers reference list">
       <StyledToolbar>
         <input
+          onFocus={textFieldFocus.onFocus}
+          onBlur={textFieldFocus.onBlur}
           aria-label="Search loaded influencers"
           placeholder="Search loaded influencers"
           type="search"

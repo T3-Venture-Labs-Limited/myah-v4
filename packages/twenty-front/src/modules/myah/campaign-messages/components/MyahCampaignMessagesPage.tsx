@@ -1,3 +1,4 @@
+import { useTextFieldFocusProps } from '@/ui/utilities/focus/hooks/useTextFieldFocusProps';
 import { campaignMessageReasonLabel } from '@/myah/campaign-messages/utils/campaignMessageReasonLabel';
 import { gql } from '@apollo/client';
 import { useApolloClient, useQuery } from '@apollo/client/react';
@@ -494,6 +495,7 @@ const MultiFilter = ({
 );
 
 export const MyahCampaignMessagesPage = () => {
+  const textFieldFocus = useTextFieldFocusProps();
   const [params, setParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -688,6 +690,8 @@ export const MyahCampaignMessagesPage = () => {
         <StyledSearch>
           <IconSearch size={14} />
           <input
+            onFocus={textFieldFocus.onFocus}
+            onBlur={textFieldFocus.onBlur}
             aria-label="Search recipient or subject"
             placeholder="Search recipient or subject"
             type="search"
