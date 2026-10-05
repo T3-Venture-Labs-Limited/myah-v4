@@ -1,3 +1,4 @@
+import { useTextFieldFocusProps } from '@/ui/utilities/focus/hooks/useTextFieldFocusProps';
 import { styled } from '@linaria/react';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -158,6 +159,7 @@ export const CampaignSequenceEditor = ({
   selectedMessageId,
   sequence,
 }: CampaignSequenceEditorProps) => {
+  const textFieldFocus = useTextFieldFocusProps();
   const addMessage = (channel: CampaignSequenceMessage['channel']) => {
     const message: CampaignSequenceMessage =
       channel === 'EMAIL'
@@ -331,6 +333,8 @@ export const CampaignSequenceEditor = ({
                   <label>
                     Wait
                     <input
+                      onFocus={textFieldFocus.onFocus}
+                      onBlur={textFieldFocus.onBlur}
                       aria-label={`Wait before step ${index + 2}`}
                       disabled={!editable}
                       min={1}
@@ -358,6 +362,8 @@ export const CampaignSequenceEditor = ({
                         <label key={unit.key}>
                           {unit.key}
                           <input
+                            onFocus={textFieldFocus.onFocus}
+                            onBlur={textFieldFocus.onBlur}
                             aria-label={`Delay ${index + 1} ${unit.key}`}
                             disabled={!editable}
                             min={0}

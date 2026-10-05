@@ -1,3 +1,4 @@
+import { useTextFieldFocusProps } from '@/ui/utilities/focus/hooks/useTextFieldFocusProps';
 import { styled } from '@linaria/react';
 import { useState } from 'react';
 import { Button } from 'twenty-ui/input';
@@ -45,6 +46,7 @@ export const MyahSocialProfileAddRow = ({
   objectMetadataItem: EnrichedObjectMetadataItem;
   onCreate: (input: Partial<ObjectRecord>) => Promise<unknown>;
 }) => {
+  const textFieldFocus = useTextFieldFocusProps();
   const platforms =
     objectMetadataItem.fields.find((field) => field.name === 'platform')
       ?.options ?? [];
@@ -91,6 +93,8 @@ export const MyahSocialProfileAddRow = ({
         ))}
       </select>
       <input
+        onFocus={textFieldFocus.onFocus}
+        onBlur={textFieldFocus.onBlur}
         aria-label="Handle"
         placeholder="handle or profile URL"
         value={handle}

@@ -1,3 +1,4 @@
+import { useTextFieldFocusProps } from '@/ui/utilities/focus/hooks/useTextFieldFocusProps';
 import { useMutation, useQuery } from '@apollo/client/react';
 import { styled } from '@linaria/react';
 import { useEffect, useState } from 'react';
@@ -66,6 +67,7 @@ const toDraft = (agent: MyahAgent | undefined): GuidanceDraft => ({
 });
 
 export const MyahAgentPage = () => {
+  const textFieldFocus = useTextFieldFocusProps();
   const canEdit = useHasPermissionFlag(PermissionFlagType.WORKSPACE);
   const { enqueueSuccessSnackBar, enqueueErrorSnackBar } = useSnackBar();
   const { data, loading } = useQuery<{ myahAgent: MyahAgent }>(GET_MYAH_AGENT);
@@ -165,6 +167,8 @@ export const MyahAgentPage = () => {
               <StyledAgentField>
                 Language
                 <input
+                  onFocus={textFieldFocus.onFocus}
+                  onBlur={textFieldFocus.onBlur}
                   value={draft.language ?? ''}
                   disabled={readOnly}
                   onChange={change('language')}
@@ -178,6 +182,8 @@ export const MyahAgentPage = () => {
               </StyledAgentHint>
               <StyledAgentField>
                 <textarea
+                  onFocus={textFieldFocus.onFocus}
+                  onBlur={textFieldFocus.onBlur}
                   aria-label="Brand and product information"
                   rows={6}
                   value={draft.brandInformation ?? ''}
@@ -193,6 +199,8 @@ export const MyahAgentPage = () => {
               </StyledAgentHint>
               <StyledAgentField>
                 <textarea
+                  onFocus={textFieldFocus.onFocus}
+                  onBlur={textFieldFocus.onBlur}
                   aria-label="Reply rules"
                   value={draft.replyRules ?? ''}
                   disabled={readOnly}
@@ -207,6 +215,8 @@ export const MyahAgentPage = () => {
               </StyledAgentHint>
               <StyledAgentField>
                 <textarea
+                  onFocus={textFieldFocus.onFocus}
+                  onBlur={textFieldFocus.onBlur}
                   aria-label="Escalation boundaries"
                   value={draft.escalationBoundaries ?? ''}
                   disabled={readOnly}
