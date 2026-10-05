@@ -1,3 +1,4 @@
+import { MYAH_HIDDEN_OBJECT_NAME_SINGULARS } from '@/myah/navigation/constants/MyahHiddenObjectNameSingulars';
 import {
   CommandMenuContext,
   type CommandMenuContextType,
@@ -41,7 +42,8 @@ export const CommandMenuContextProviderContent = ({
     const internalInstagramObjectIds = new Set(
       objectMetadataItems.flatMap(({ id, nameSingular }) =>
         nameSingular === 'myahInstagramAccount' ||
-        nameSingular === 'myahInstagramReplyDraft'
+        nameSingular === 'myahInstagramReplyDraft' ||
+        MYAH_HIDDEN_OBJECT_NAME_SINGULARS.includes(nameSingular)
           ? [id]
           : [],
       ),

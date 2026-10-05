@@ -65,16 +65,17 @@ describe('MYAH_NAVIGATION_ROUTES', () => {
         group: 'campaign-operations',
         availability: 'soon',
       },
-      { id: 'automations', group: 'outreach', availability: 'available' },
+      // Hidden for now (MYAH-460).
+      { id: 'automations', group: 'outreach', availability: 'deferred' },
       {
         id: 'automation-runs',
         group: 'outreach',
-        availability: 'available',
+        availability: 'deferred',
       },
       {
         id: 'automation-versions',
         group: 'outreach',
-        availability: 'available',
+        availability: 'deferred',
       },
       { id: 'tasks', group: 'outreach', availability: 'available' },
       { id: 'approvals', group: 'outreach', availability: 'deferred' },
@@ -147,39 +148,6 @@ describe('MYAH_NAVIGATION_ROUTES', () => {
       object: {
         kind: 'app-object',
         universalIdentifier: '9a09d54a-d464-5692-ac74-70527fb00ddd',
-      },
-    });
-    expect(
-      getMyahNavigationRoute(
-        'automations' as Parameters<typeof getMyahNavigationRoute>[0],
-      ).destination,
-    ).toEqual({
-      kind: 'native-object',
-      object: {
-        kind: 'core-object',
-        nameSingular: CoreObjectNameSingular.Workflow,
-      },
-    });
-    expect(
-      getMyahNavigationRoute(
-        'automation-runs' as Parameters<typeof getMyahNavigationRoute>[0],
-      ).destination,
-    ).toEqual({
-      kind: 'native-object',
-      object: {
-        kind: 'core-object',
-        nameSingular: CoreObjectNameSingular.WorkflowRun,
-      },
-    });
-    expect(
-      getMyahNavigationRoute(
-        'automation-versions' as Parameters<typeof getMyahNavigationRoute>[0],
-      ).destination,
-    ).toEqual({
-      kind: 'native-object',
-      object: {
-        kind: 'core-object',
-        nameSingular: CoreObjectNameSingular.WorkflowVersion,
       },
     });
     expect(getMyahNavigationRoute('tasks').destination).toEqual({
