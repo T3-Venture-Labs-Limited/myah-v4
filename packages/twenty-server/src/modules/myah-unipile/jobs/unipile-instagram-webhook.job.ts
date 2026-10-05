@@ -48,7 +48,7 @@ type ClaimedWebhookEvent = {
 };
 
 @Processor({
-  queueName: MessageQueue.messagingQueue,
+  queueName: MessageQueue.myahCreatorMessageQueue,
   scope: Scope.REQUEST,
 })
 export class UnipileInstagramWebhookJob {

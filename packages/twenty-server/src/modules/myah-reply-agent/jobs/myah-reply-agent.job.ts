@@ -13,7 +13,7 @@ import {
 import { MyahReplyAgentService } from 'src/modules/myah-reply-agent/services/myah-reply-agent.service';
 
 @Injectable()
-@Processor(MessageQueue.messagingQueue)
+@Processor(MessageQueue.myahCreatorMessageQueue)
 export class MyahReplyAgentJob {
   constructor(
     private readonly instagramReplies: CampaignInstagramReplyService,
