@@ -12,6 +12,7 @@ import {
   type ConnectionParametersInput,
   EmailConnectionSecurity,
   SaveImapSmtpCaldavAccountDocument,
+  StartChannelSyncDocument,
 } from '~/generated-metadata/graphql';
 import { useNavigateSettings } from '~/hooks/useNavigateSettings';
 
@@ -114,6 +115,10 @@ export const useImapSmtpCaldavConnectionForm = ({
     SaveImapSmtpCaldavAccountDocument,
   );
 
+  const [startChannelSync, { loading: syncLoading }] = useMutation(
+    StartChannelSyncDocument,
+  );
+
   const watchedValues = watch();
 
   const getConfiguredProtocols = useCallback(
@@ -177,14 +182,29 @@ export const useImapSmtpCaldavConnectionForm = ({
         });
         if (!isDefined(data)) return;
 
+        const returnedConnectedAccountId =
+          data.saveImapSmtpCaldavAccount?.connectedAccountId;
+        if (returnedConnectedAccountId) {
+          try {
+            await startChannelSync({
+              variables: { connectedAccountId: returnedConnectedAccountId },
+            });
+          } catch {
+            enqueueErrorSnackBar({
+              message: t`Account saved, but import could not start. Finish setup to try again.`,
+            });
+            navigate(SettingsPath.AccountsConfiguration, {
+              connectedAccountId: returnedConnectedAccountId,
+            });
+            return;
+          }
+        }
+
         const successMessage = isEditing
           ? t`Connection successfully updated`
           : t`Connection successfully created`;
 
         enqueueSuccessSnackBar({ message: successMessage });
-
-        const { connectedAccountId: returnedConnectedAccountId } =
-          data?.saveImapSmtpCaldavAccount ?? {};
 
         if (!isEditing && returnTo && returnedConnectedAccountId) {
           const returnUrl = new URL(returnTo, window.location.origin);
@@ -198,9 +218,7 @@ export const useImapSmtpCaldavConnectionForm = ({
           return;
         }
 
-        navigate(SettingsPath.AccountsConfiguration, {
-          connectedAccountId: returnedConnectedAccountId,
-        });
+        navigate(SettingsPath.Accounts);
       } catch (error) {
         enqueueErrorSnackBar({
           apolloError: CombinedGraphQLErrors.is(error) ? error : undefined,
@@ -210,6 +228,7 @@ export const useImapSmtpCaldavConnectionForm = ({
     [
       getConfiguredProtocols,
       saveConnection,
+      startChannelSync,
       isEditing,
       connectedAccountId,
       enqueueSuccessSnackBar,
@@ -221,7 +240,7 @@ export const useImapSmtpCaldavConnectionForm = ({
   );
 
   const canSave = isValid && !isSubmitting;
-  const loading = accountLoading || saveLoading;
+  const loading = accountLoading || saveLoading || syncLoading;
 
   return {
     formMethods,

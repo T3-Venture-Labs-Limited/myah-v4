@@ -80,9 +80,9 @@ export class ImapSmtpCaldavService {
 
       if (error.authenticationFailed) {
         throw new UserInputError(
-          'IMAP authentication failed. Please check your credentials.',
+          'IMAP authentication failed. Check your username and password; your provider may require an app password and IMAP access enabled.',
           {
-            userFriendlyMessage: msg`We couldn't log in to your email account. Please check your email address and password, then try again.`,
+            userFriendlyMessage: msg`IMAP authentication failed. Check your username and password; your provider may require an app password and IMAP access enabled.`,
           },
         );
       }
@@ -96,9 +96,12 @@ export class ImapSmtpCaldavService {
         );
       }
 
-      throw new UserInputError(`IMAP connection failed: ${error.message}`, {
-        userFriendlyMessage: msg`We encountered an issue connecting to your email account. Please check your settings and try again.`,
-      });
+      throw new UserInputError(
+        'IMAP connection failed. Check the server, port and security setting; normally port 993 uses SSL/TLS and port 143 uses STARTTLS.',
+        {
+          userFriendlyMessage: msg`IMAP connection failed. Check the server, port and security setting; normally port 993 uses SSL/TLS and port 143 uses STARTTLS.`,
+        },
+      );
     } finally {
       if (client.authenticated) {
         await client.logout();
@@ -133,9 +136,23 @@ export class ImapSmtpCaldavService {
         `SMTP connection failed: ${error.message}`,
         error.stack,
       );
-      throw new UserInputError(`SMTP connection failed: ${error.message}`, {
-        userFriendlyMessage: msg`We couldn't connect to your outgoing email server. Please check your SMTP settings and try again.`,
-      });
+      if (
+        this.classifyWorkspaceMailboxConnectionError(error) ===
+        'AUTHENTICATION_FAILED'
+      ) {
+        throw new UserInputError(
+          'SMTP authentication failed. Check your username and password; your provider may require an app password and SMTP access enabled.',
+          {
+            userFriendlyMessage: msg`SMTP authentication failed. Check your username and password; your provider may require an app password and SMTP access enabled.`,
+          },
+        );
+      }
+      throw new UserInputError(
+        'SMTP connection failed. Check the server, port and security setting; normally port 465 uses SSL/TLS and port 587 uses STARTTLS.',
+        {
+          userFriendlyMessage: msg`SMTP connection failed. Check the server, port and security setting; normally port 465 uses SSL/TLS and port 587 uses STARTTLS.`,
+        },
+      );
     }
 
     return true;

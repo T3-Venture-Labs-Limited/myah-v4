@@ -84,6 +84,24 @@ describe('ImapSmtpCaldavService', () => {
       connectionSecurity: EmailConnectionSecurity.STARTTLS,
     };
 
+    it('explains SMTP port and TLS settings instead of exposing the provider error', async () => {
+      mockVerify.mockRejectedValueOnce(
+        new Error('Greeting never received: private server detail'),
+      );
+      await expect(
+        service.testSmtpConnection('user@example.com', params),
+      ).rejects.toThrow(/465.*SSL\/TLS.*587.*STARTTLS/);
+    });
+
+    it('explains how to fix SMTP authentication', async () => {
+      mockVerify.mockRejectedValueOnce(
+        Object.assign(new Error('private auth detail'), { code: 'EAUTH' }),
+      );
+      await expect(
+        service.testSmtpConnection('user@example.com', params),
+      ).rejects.toThrow(/app password/);
+    });
+
     it('uses implicit TLS when connectionSecurity is SSL_TLS', async () => {
       await service.testSmtpConnection('user@example.com', {
         ...params,

@@ -286,7 +286,11 @@ jest.mock('twenty-ui/input', () => {
 const linkedAccount = {
   id: 'campaign-account-1',
   connectedAccountId: 'connected-account-1',
-  health: 'AVAILABLE' as 'AVAILABLE' | 'RECONNECT_REQUIRED' | 'UNAVAILABLE',
+  health: 'AVAILABLE' as
+    | 'AVAILABLE'
+    | 'RECONNECT_REQUIRED'
+    | 'UNAVAILABLE'
+    | 'IMPORTING',
   isDefault: true,
   label: 'Primary mailbox',
   provider: 'GOOGLE',
@@ -607,6 +611,16 @@ describe('MyahCampaignEmailAccounts', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Available email accounts could not be loaded.',
     );
+  });
+
+  it('explains first import without asking the user to reconnect', () => {
+    renderWithAccounts({ candidates: [{ ...candidate, health: 'IMPORTING' }] });
+    openAccountPicker();
+    expect(
+      screen.getByRole('button', { name: 'Add team@example.com' }),
+    ).toBeDisabled();
+    expect(screen.getByText(/Importing.*ready in a few minutes/)).toBeVisible();
+    expect(screen.queryByText('Reconnect required')).not.toBeInTheDocument();
   });
 
   it('disables unavailable candidates and uses one named dialog popup', () => {

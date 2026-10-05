@@ -1751,7 +1751,7 @@ export interface CampaignEmailAccountDTO {
     __typename: 'CampaignEmailAccountDTO'
 }
 
-export type CampaignEmailAccountHealth = 'AVAILABLE' | 'RECONNECT_REQUIRED' | 'UNAVAILABLE'
+export type CampaignEmailAccountHealth = 'AVAILABLE' | 'IMPORTING' | 'RECONNECT_REQUIRED' | 'UNAVAILABLE'
 
 export interface CampaignCreatorDTO {
     id: Scalars['UUID']
@@ -11436,6 +11436,7 @@ export const enumLogicFunctionExecutionStatus = {
 
 export const enumCampaignEmailAccountHealth = {
    AVAILABLE: 'AVAILABLE' as const,
+   IMPORTING: 'IMPORTING' as const,
    RECONNECT_REQUIRED: 'RECONNECT_REQUIRED' as const,
    UNAVAILABLE: 'UNAVAILABLE' as const
 }
