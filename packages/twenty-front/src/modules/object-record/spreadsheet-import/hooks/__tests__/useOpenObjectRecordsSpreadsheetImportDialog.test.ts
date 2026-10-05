@@ -12,6 +12,7 @@ import { getJestMetadataAndApolloMocksWrapper } from '~/testing/jest/getJestMeta
 const COMPANY_ID = 'cb2e9f4b-20c3-4759-9315-4ffeecfaf71a';
 
 jest.mock('uuid', () => ({
+  ...jest.requireActual('uuid'),
   v4: jest.fn(() => 'cb2e9f4b-20c3-4759-9315-4ffeecfaf71a'),
 }));
 
@@ -177,7 +178,7 @@ const companyMocks = [
       `,
       variables: {
         input: {
-          attemptKey: COMPANY_ID,
+          attemptKey: expect.stringMatching(/^[0-9a-f-]{36}$/),
           operationKey: 'row-row-a',
           creator: { name: 'Ada' },
           profiles: [],
@@ -213,7 +214,7 @@ const companyMocks = [
       `,
       variables: {
         input: {
-          attemptKey: COMPANY_ID,
+          attemptKey: expect.stringMatching(/^[0-9a-f-]{36}$/),
           operationKey: 'row-row-retry',
           creator: { name: 'Ada' },
           profiles: [],
@@ -268,6 +269,7 @@ describe('useOpenObjectRecordsSpreadsheetImportDialog', () => {
       tableHook: jest.fn((table) => table),
       beforeSubmitHook: jest.fn(),
       getSubmissionBlockReason: jest.fn(),
+      getExistingCreatorIds: jest.fn(() => []),
       getSummary: jest.fn(() => ({ existing: 0, conflicts: 0 })),
       getRowPreview: jest.fn(() => ({
         creatorFields: ['Name'],
@@ -505,7 +507,7 @@ describe('useOpenObjectRecordsSpreadsheetImportDialog', () => {
       expect.objectContaining({
         variables: {
           input: {
-            attemptKey: COMPANY_ID,
+            attemptKey: expect.stringMatching(/^[0-9a-f-]{36}$/),
             operationKey: 'row-row-core',
             creator: { name: 'Ada' },
             profiles: [],
@@ -564,6 +566,61 @@ describe('useOpenObjectRecordsSpreadsheetImportDialog', () => {
     ).resolves.toBeUndefined();
     expect(mockApolloMetadataClient.mutate).toHaveBeenCalledTimes(2);
     expect(mockApolloCoreClient.mutate).not.toHaveBeenCalled();
+  });
+
+  it('gives a different file its own attempt and the same file the same attempt (MYAH-457)', async () => {
+    (mockCreatorSession.buildRowCommitPlan as jest.Mock).mockImplementation(
+      (row: { name: string }) => ({
+        creator: { name: row.name },
+        profiles: [],
+      }),
+    );
+    mockApolloMetadataClient.mutate.mockResolvedValue({
+      data: {
+        commitCreatorImport: {
+          receiptId: 'receipt',
+          creatorId: 'creator',
+          socialProfileIds: [],
+          noteId: null,
+          noteTargetId: null,
+          replayed: false,
+        },
+      },
+    });
+    const { result } = renderHook(
+      () =>
+        useOpenObjectRecordsSpreadsheetImportDialog('creator')
+          .openObjectRecordsSpreadsheetImportDialog,
+      { wrapper: Wrapper },
+    );
+    const submit = async (name: string) => {
+      await act(async () => {
+        result.current();
+      });
+      const options = jotaiStore.get(spreadsheetImportDialogState.atom).options;
+      await options?.onSubmit(
+        {
+          validStructuredRows: [{ name }],
+          validStructuredRowIndexes: ['row-1'],
+          invalidStructuredRows: [],
+          allStructuredRows: [{ name, __index: 'row-1' }],
+        },
+        fakeCsv(),
+      );
+      const calls = mockApolloMetadataClient.mutate.mock.calls;
+      return calls[calls.length - 1][0].variables.input as {
+        attemptKey: string;
+        operationKey: string;
+      };
+    };
+
+    const sample = await submit('Sample creator');
+    const realFile = await submit('Real creator');
+    const sampleAgain = await submit('Sample creator');
+
+    expect(realFile.operationKey).toBe(sample.operationKey);
+    expect(realFile.attemptKey).not.toBe(sample.attemptKey);
+    expect(sampleAgain.attemptKey).toBe(sample.attemptKey);
   });
 
   it('skips the Creator mutation when every row already exists', async () => {

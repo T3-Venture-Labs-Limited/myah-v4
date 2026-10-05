@@ -9,6 +9,8 @@ const mockOpenModal = jest.fn();
 const mockCloseModal = jest.fn();
 const mockAddMember = jest.fn();
 const mockRemoveMember = jest.fn();
+const mockAddMembers = jest.fn().mockResolvedValue(undefined);
+const mockOpenImport = jest.fn();
 const mockEnqueueErrorSnackBar = jest.fn();
 const refetchMembers = jest.fn().mockResolvedValue(undefined);
 const fetchMoreMembers = jest.fn().mockResolvedValue(undefined);
@@ -23,6 +25,17 @@ jest.mock('@apollo/client/react', () => ({
 jest.mock('@/object-record/hooks/useFindManyRecords', () => ({
   useFindManyRecords: (...args: unknown[]) => mockUseFindManyRecords(...args),
 }));
+jest.mock(
+  '@/object-record/spreadsheet-import/hooks/useOpenObjectRecordsSpreadsheetImportDialog',
+  () => ({
+    useOpenObjectRecordsSpreadsheetImportDialog: (
+      objectNameSingular: string,
+    ) => ({
+      openObjectRecordsSpreadsheetImportDialog: (...args: unknown[]) =>
+        mockOpenImport(objectNameSingular, ...args),
+    }),
+  }),
+);
 jest.mock('@/ui/layout/modal/hooks/useModal', () => ({
   useModal: () => ({ openModal: mockOpenModal, closeModal: mockCloseModal }),
 }));
@@ -88,6 +101,9 @@ describe('MyahCreatorListMembers', () => {
       }
       if (mutation.includes('RemoveCreatorListMemberIntent')) {
         return [mockRemoveMember];
+      }
+      if (mutation.includes('AddCreatorListMembersIntent')) {
+        return [mockAddMembers];
       }
 
       throw new Error(`Unexpected mutation: ${mutation}`);
@@ -182,5 +198,31 @@ describe('MyahCreatorListMembers', () => {
     );
     expect(mockUseQuery).not.toHaveBeenCalled();
     expect(refetchMembers).toHaveBeenCalled();
+  });
+
+  it('imports a creator spreadsheet into this List (MYAH-457)', async () => {
+    render(<MyahCreatorListMembers creatorListId="creator-list-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import creators' }));
+
+    expect(mockOpenImport).toHaveBeenCalledWith(
+      'creator',
+      undefined,
+      expect.any(Function),
+    );
+    const onCreatorsImported = mockOpenImport.mock.calls[0][2];
+    const creatorIds = Array.from({ length: 501 }, (_, i) => `creator-${i}`);
+
+    await onCreatorsImported(creatorIds);
+
+    await waitFor(() => expect(refetchMembers).toHaveBeenCalled());
+    expect(mockAddMembers).toHaveBeenCalledTimes(2);
+    expect(mockAddMembers.mock.calls[0][0].variables.input).toEqual({
+      creatorListId: 'creator-list-1',
+      creatorIds: creatorIds.slice(0, 500),
+    });
+    expect(mockAddMembers.mock.calls[1][0].variables.input.creatorIds).toEqual([
+      'creator-500',
+    ]);
   });
 });

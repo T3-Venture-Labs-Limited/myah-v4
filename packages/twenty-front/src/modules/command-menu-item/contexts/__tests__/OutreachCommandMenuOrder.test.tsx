@@ -272,3 +272,50 @@ it('leaves Instagram first when Email and Campaign are unavailable', () => {
     screen.getAllByRole('button').map((button) => button.textContent),
   ).toEqual(['Message on Instagram', 'Search records']);
 });
+
+it('hides "Import Creator Lists" on the Creator Lists page (MYAH-457)', () => {
+  mockItems = [
+    {
+      ...item(
+        'Import Creator Lists',
+        1,
+        null,
+        CommandMenuItemAvailabilityType.GLOBAL_OBJECT_CONTEXT,
+      ),
+      engineComponentKey: EngineComponentKey.IMPORT_RECORDS,
+    },
+    {
+      ...item(
+        'Export View',
+        2,
+        null,
+        CommandMenuItemAvailabilityType.GLOBAL_OBJECT_CONTEXT,
+      ),
+      engineComponentKey: EngineComponentKey.EXPORT_VIEW,
+    },
+  ] as CommandMenuItemFieldsFragment[];
+  render(
+    <I18nProvider i18n={i18n}>
+      <CommandMenuContextProviderContent
+        displayType="listItem"
+        containerType="command-menu-list"
+        commandMenuContextApi={{
+          ...EMPTY_COMMAND_MENU_CONTEXT_API,
+          pageType: ContextStorePageType.Index,
+          objectMetadataItem: {
+            id: 'creatorList',
+            nameSingular: 'creatorList',
+          },
+          numberOfSelectedRecords: 0,
+        }}
+        isInPreviewMode={false}
+      >
+        <SidePanelCommandMenuItemDisplayPage />
+      </CommandMenuContextProviderContent>
+    </I18nProvider>,
+  );
+
+  expect(
+    screen.getAllByRole('button').map((button) => button.textContent),
+  ).toEqual(['Export View']);
+});

@@ -993,6 +993,15 @@ export const buildCreatorSpreadsheetImportSession = ({
         ? 'Remove conflicting Creator rows before importing'
         : undefined;
     },
+    getExistingCreatorIds: (rows) => {
+      const creatorIds = new Set<string>();
+      for (const row of rows) {
+        const classification = classificationsByRowId.get(String(row.__index));
+        if (classification?.kind === 'existing')
+          creatorIds.add(classification.creatorId);
+      }
+      return [...creatorIds];
+    },
     getSummary: (rows) => {
       let existing = 0;
       let conflicts = excludedConflictRowIds.size;

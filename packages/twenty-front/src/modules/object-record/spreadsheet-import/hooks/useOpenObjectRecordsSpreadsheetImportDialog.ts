@@ -17,8 +17,7 @@ import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { useSetAtomState } from '@/ui/utilities/state/jotai/hooks/useSetAtomState';
 import { gql } from '@apollo/client';
 import { useApolloClient } from '@apollo/client/react';
-import { useState } from 'react';
-import { v4 as uuidv4 } from 'uuid';
+import { v5 as uuidv5 } from 'uuid';
 import { useLingui } from '@lingui/react/macro';
 
 const COMMIT_CREATOR_IMPORT = gql`
@@ -34,14 +33,13 @@ const COMMIT_CREATOR_IMPORT = gql`
   }
 `;
 
+const CREATOR_IMPORT_ATTEMPT_NAMESPACE = '6a3f7c2e-8b1d-4e5a-9c7f-2d4b6e8a1c3f';
+
 export const useOpenObjectRecordsSpreadsheetImportDialog = (
   objectNameSingular: string,
 ) => {
   const apolloCoreClient = useApolloCoreClient();
   const apolloMetadataClient = useApolloClient();
-  const [creatorImportAttemptKey, setCreatorImportAttemptKey] = useState<
-    string | null
-  >(null);
   const { openSpreadsheetImportDialog } = useOpenSpreadsheetImportDialog();
   const { buildSpreadsheetImportFields } = useBuildSpreadsheetImportFields();
 
@@ -78,6 +76,9 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
       SpreadsheetImportDialogOptions,
       'fields' | 'isOpen' | 'onClose'
     >,
+    // Creator imports only: every imported or matched creator, e.g. to add
+    // them to the Creator List the import was started from (MYAH-457).
+    onCreatorsImported?: (creatorIds: string[]) => Promise<void>,
   ) => {
     const availableFieldMetadataItemsToImport =
       spreadsheetImportFilterAvailableFieldMetadataItems(
@@ -96,13 +97,6 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
             queryExistingCreators: queryExistingCreatorSocialProfiles,
           })
         : undefined;
-    const currentCreatorImportAttemptKey = creatorSession
-      ? (creatorImportAttemptKey ?? uuidv4())
-      : null;
-
-    if (creatorSession && !creatorImportAttemptKey) {
-      setCreatorImportAttemptKey(currentCreatorImportAttemptKey);
-    }
     const nativeTableHook =
       spreadsheetImportGetUnicityTableHook(objectMetadataItem);
     const tableHook = creatorSession
@@ -127,26 +121,45 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
             );
 
         try {
-          if (creatorSession && currentCreatorImportAttemptKey) {
-            for (const [rowIndex, row] of data.validStructuredRows.entries()) {
-              const sourceRowIndex = data.validStructuredRowIndexes[rowIndex];
-              if (!sourceRowIndex) {
-                throw new Error('Creator import row identity is unavailable');
-              }
-
-              await apolloMetadataClient.mutate({
+          if (creatorSession) {
+            const commitPlans = data.validStructuredRows.map(
+              (row, rowIndex) => {
+                const sourceRowIndex = data.validStructuredRowIndexes[rowIndex];
+                if (!sourceRowIndex) {
+                  throw new Error('Creator import row identity is unavailable');
+                }
+                return {
+                  operationKey: `row-${sourceRowIndex}`,
+                  plan: creatorSession.buildRowCommitPlan(row),
+                };
+              },
+            );
+            // The attempt is derived from the rows themselves (MYAH-457):
+            // retrying the same file replays safely, while another file (or
+            // an edited row) gets its own attempt instead of colliding with
+            // an earlier one ("identity was reused with different input").
+            const attemptKey = uuidv5(
+              JSON.stringify(commitPlans),
+              CREATOR_IMPORT_ATTEMPT_NAMESPACE,
+            );
+            const importedCreatorIds = new Set(
+              creatorSession.getExistingCreatorIds(data.allStructuredRows),
+            );
+            for (const [
+              rowIndex,
+              { operationKey, plan },
+            ] of commitPlans.entries()) {
+              const committed = await apolloMetadataClient.mutate<{
+                commitCreatorImport: { creatorId: string };
+              }>({
                 mutation: COMMIT_CREATOR_IMPORT,
-                variables: {
-                  input: {
-                    attemptKey: currentCreatorImportAttemptKey,
-                    operationKey: `row-${sourceRowIndex}`,
-                    ...creatorSession.buildRowCommitPlan(row),
-                  },
-                },
+                variables: { input: { attemptKey, operationKey, ...plan } },
               });
+              const creatorId = committed?.data?.commitCreatorImport.creatorId;
+              if (creatorId) importedCreatorIds.add(creatorId);
               setSpreadsheetImportCreatedRecordsProgress(rowIndex + 1);
             }
-            setCreatorImportAttemptKey(null);
+            await onCreatorsImported?.([...importedCreatorIds]);
             // Same table-reload signal the native batch-create path emits.
             dispatchObjectRecordOperationBrowserEvent({
               objectMetadataItem,
@@ -226,7 +239,6 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
       availableFieldMetadataItems: availableFieldMetadataItemsToImport,
       onAbortSubmit: () => {
         abortController.abort();
-        setCreatorImportAttemptKey(null);
       },
       tableHook,
     });
