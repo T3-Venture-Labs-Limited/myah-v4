@@ -103,10 +103,7 @@ type ReplyExpansionState = {
 type PendingReveal = { anchorKey: string; messageId: string };
 type LocationRefs = {
   scope: History['openCard'];
-  priorKeys: Set<string>;
-  handledKeys: Set<string>;
-  priorStatus: History['status'];
-  recoveryObserved: boolean;
+  handledRevealId: number | null;
   pending: PendingReveal | null;
 };
 export const getMyahInboxOutreachCards = (
@@ -168,19 +165,13 @@ export const MyahInboxEmailOutreachHistory = ({
   // oxlint-disable-next-line twenty/no-state-useref
   const locationRefs = useRef<LocationRefs>({
     scope: history.openCard,
-    priorKeys: new Set(),
-    handledKeys: new Set(),
-    priorStatus: history.status,
-    recoveryObserved: false,
+    handledRevealId: history.reveal?.id ?? null,
     pending: null,
   });
   if (locationRefs.current.scope !== history.openCard) {
     locationRefs.current = {
       scope: history.openCard,
-      priorKeys: new Set(),
-      handledKeys: new Set(),
-      priorStatus: history.status,
-      recoveryObserved: false,
+      handledRevealId: history.reveal?.id ?? null,
       pending: null,
     };
   }
@@ -289,56 +280,29 @@ export const MyahInboxEmailOutreachHistory = ({
   // oxlint-disable-next-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
     const refs = locationRefs.current;
-    if (history.status === 'masked' || history.status === 'needs-rebase') {
-      refs.recoveryObserved = true;
-      refs.priorStatus = history.status;
+    const reveal = history.reveal;
+    if (
+      history.status !== 'ready' ||
+      !reveal ||
+      refs.handledRevealId === reveal.id
+    )
       return;
-    }
-    if (history.status !== 'ready') return;
-    const locations = history.windows.flatMap((window) =>
-      window.requests.flatMap((request) =>
-        request.messageId
-          ? [
-              {
-                key: `${window.id}:${request.messageId}`,
-                anchorKey: window.card.anchorKey,
-                messageId: request.messageId,
-              },
-            ]
-          : [],
-      ),
-    );
-    if (refs.recoveryObserved) {
-      for (const { key } of locations) refs.handledKeys.add(key);
-      refs.recoveryObserved = false;
-    } else if (refs.priorStatus === 'ready') {
-      const explicit = locations.find(
-        ({ key }) => !refs.priorKeys.has(key) && !refs.handledKeys.has(key),
-      );
-      if (explicit) {
-        refs.handledKeys.add(explicit.key);
-        refs.pending = {
-          anchorKey: explicit.anchorKey,
-          messageId: explicit.messageId,
-        };
-        setReplyExpansion((current) => {
-          if (
-            current.scope !== history.openCard ||
-            current.expandedThreadIds.has(explicit.anchorKey)
-          )
-            return current;
-          return {
-            ...current,
-            expandedThreadIds: new Set([
-              ...current.expandedThreadIds,
-              explicit.anchorKey,
-            ]),
-          };
-        });
-      }
-    }
-    refs.priorKeys = new Set(locations.map(({ key }) => key));
-    refs.priorStatus = 'ready';
+    refs.handledRevealId = reveal.id;
+    refs.pending = { anchorKey: reveal.anchorKey, messageId: reveal.messageId };
+    setReplyExpansion((current) => {
+      if (
+        current.scope !== history.openCard ||
+        current.expandedThreadIds.has(reveal.anchorKey)
+      )
+        return current;
+      return {
+        ...current,
+        expandedThreadIds: new Set([
+          ...current.expandedThreadIds,
+          reveal.anchorKey,
+        ]),
+      };
+    });
   });
   useLayoutEffect(() => {
     const area = scroll.current;
@@ -463,14 +427,14 @@ export const MyahInboxEmailOutreachHistory = ({
             ).values(),
           ].sort(compareMessages),
         }));
+        const gapKeys = new Set<string>();
         const gaps = ranges.flatMap((range) =>
           (['older', 'newer'] as const).flatMap((direction) => {
-            if (
-              !(direction === 'older'
+            const cursor =
+              direction === 'older'
                 ? range.window.olderCursor
-                : range.window.newerCursor)
-            )
-              return [];
+                : range.window.newerCursor;
+            if (!cursor) return [];
             const boundary =
               direction === 'older'
                 ? range.messages.at(0)
@@ -489,9 +453,15 @@ export const MyahInboxEmailOutreachHistory = ({
                     : compareMessages(other.messages.at(-1)!, boundary) > 0 ||
                       !other.window.newerCursor),
               );
-            return covered
-              ? []
-              : [{ windowId: range.window.id, direction, boundary }];
+            const key = JSON.stringify([
+              direction,
+              boundary?.id ?? null,
+              range.window.snapshot,
+              cursor,
+            ]);
+            if (covered || gapKeys.has(key)) return [];
+            gapKeys.add(key);
+            return [{ windowId: range.window.id, direction, boundary }];
           }),
         );
         const gapControl = (gap: (typeof gaps)[number]) => (

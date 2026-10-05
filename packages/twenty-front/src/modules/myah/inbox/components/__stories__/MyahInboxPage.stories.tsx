@@ -364,6 +364,7 @@ const MyahInboxStorySurface = ({
     historyRebased: false,
     cardPageBudget: 1,
     locationMissing: false,
+    reveal: null,
     status: 'ready',
     loading: false,
     error: undefined,
