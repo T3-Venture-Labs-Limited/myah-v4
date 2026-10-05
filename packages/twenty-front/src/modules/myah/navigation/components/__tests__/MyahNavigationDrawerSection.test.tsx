@@ -89,7 +89,7 @@ const renderSection = (
   return { user };
 };
 describe('MyahNavigationDrawerSection', () => {
-  it('renders Myah entry links, active routes, and non-interactive Soon entries', () => {
+  it('renders live Myah links and active routes without Soon entries', () => {
     renderSection();
 
     expect(screen.getByRole('link', { name: 'Inbox' })).toHaveAttribute(
@@ -105,14 +105,9 @@ describe('MyahNavigationDrawerSection', () => {
     ).toBeVisible();
     expect(screen.queryByText('Segments')).not.toBeInTheDocument();
 
-    const creatorBriefsControl = screen.getByRole('button', {
-      name: /Creator Briefs.*Soon/i,
-    });
-    expect(creatorBriefsControl).toHaveTextContent('Soon');
-
-    expect(creatorBriefsControl).toHaveAttribute('aria-disabled', 'true');
-    expect(creatorBriefsControl).toHaveAttribute('tabindex', '-1');
-    expect(creatorBriefsControl).not.toHaveAttribute('href');
+    expect(screen.queryByText('Creator Briefs')).not.toBeInTheDocument();
+    expect(screen.queryByText('Creator Discovery')).not.toBeInTheDocument();
+    expect(screen.queryByText('Soon')).not.toBeInTheDocument();
   });
 
   it('removes group headers from the collapsed drawer while retaining group route controls', () => {
@@ -123,8 +118,8 @@ describe('MyahNavigationDrawerSection', () => {
     ).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Creators' })).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /Creator Briefs.*Soon/i }),
-    ).toBeInTheDocument();
+      screen.queryByRole('button', { name: /Creator Briefs.*Soon/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('keeps routes from closed inactive groups visible in collapsed drawer', () => {
@@ -132,8 +127,8 @@ describe('MyahNavigationDrawerSection', () => {
 
     expect(screen.getByRole('link', { name: 'Creators' })).toBeVisible();
     expect(
-      screen.getByRole('button', { name: /Creator Discovery.*Soon/i }),
-    ).toBeVisible();
+      screen.queryByRole('button', { name: /Creator Discovery.*Soon/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('toggles inactive groups with Enter and Space while keeping active groups open', async () => {
@@ -144,10 +139,6 @@ describe('MyahNavigationDrawerSection', () => {
     const campaignOperationsToggle = screen.getByRole('button', {
       name: 'Campaign Operations',
     });
-    const creatorBriefsControl = screen.getByRole('button', {
-      name: /Creator Briefs.*Soon/i,
-    });
-
     expect(campaignOperationsToggle).toHaveAttribute('aria-expanded', 'true');
 
     creatorCrmToggle.focus();
@@ -160,11 +151,6 @@ describe('MyahNavigationDrawerSection', () => {
     await user.click(campaignOperationsToggle);
     expect(campaignOperationsToggle).toHaveAttribute('aria-expanded', 'true');
 
-    await user.tab();
-    expect(creatorBriefsControl).not.toHaveFocus();
-    await user.keyboard('{Enter}');
-    expect(
-      screen.getByRole('button', { name: /Creator Briefs.*Soon/i }),
-    ).toBeDisabled();
+    expect(screen.getByRole('link', { name: 'Campaigns' })).toBeVisible();
   });
 });
