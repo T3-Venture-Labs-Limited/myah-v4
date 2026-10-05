@@ -109,6 +109,7 @@ jest.mock('@/object-metadata/hooks/useObjectMetadataItem', () => {
               id: 'creator-metadata-id',
               nameSingular: 'creator',
               namePlural: 'creators',
+              labelPlural: 'Creators',
               fields: [
                 {
                   id: 'creator-id-field-id',

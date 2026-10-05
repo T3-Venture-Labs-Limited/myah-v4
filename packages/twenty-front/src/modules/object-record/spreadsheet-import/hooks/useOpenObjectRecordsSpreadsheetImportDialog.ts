@@ -109,6 +109,7 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
 
     openSpreadsheetImportDialog({
       ...options,
+      sampleFileName: `${objectMetadataItem.labelPlural.toLowerCase()}-sample.csv`,
       onSubmit: async (data) => {
         const createInputs = creatorSession
           ? []
@@ -204,6 +205,8 @@ export const useOpenObjectRecordsSpreadsheetImportDialog = (
             matchColumnsStepHook: creatorSession.matchColumnsStepHook,
             beforeSubmitHook: creatorSession.beforeSubmitHook,
             getSubmissionBlockReason: creatorSession.getSubmissionBlockReason,
+            isAlreadyImportedRow: (row) =>
+              creatorSession.getExistingCreatorIds([row]).length > 0,
             getValidationPreview: (row) => {
               const preview = creatorSession.getRowPreview(row);
 

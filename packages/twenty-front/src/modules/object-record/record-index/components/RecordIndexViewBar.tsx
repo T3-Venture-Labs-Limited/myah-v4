@@ -3,7 +3,6 @@ import { RecordIndexViewBarEffect } from '@/object-record/record-index/component
 import { useRecordIndexContextOrThrow } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { useHasCurrentViewNonReadableFields } from '@/object-record/record-index/hooks/useHasCurrentViewNonReadableFields';
 import { recordIndexViewTypeState } from '@/object-record/record-index/states/recordIndexViewTypeState';
-import { SpreadsheetImportProvider } from '@/spreadsheet-import/provider/components/SpreadsheetImportProvider';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { ViewBar } from '@/views/components/ViewBar';
 import { ViewType } from '@/views/types/ViewType';
@@ -35,7 +34,7 @@ export const RecordIndexViewBar = ({
     useHasCurrentViewNonReadableFields(objectMetadataItem);
 
   return (
-    <SpreadsheetImportProvider>
+    <>
       <ViewBar
         hideQueryOnlyRecordFilters={hideQueryOnlyRecordFilters}
         isReadOnly={hasCurrentViewNonReadableFields}
@@ -61,6 +60,6 @@ export const RecordIndexViewBar = ({
         objectNamePlural={objectNamePlural}
         viewBarId={recordIndexId}
       />
-    </SpreadsheetImportProvider>
+    </>
   );
 };
