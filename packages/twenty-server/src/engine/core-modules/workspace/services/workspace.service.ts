@@ -439,6 +439,7 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
     const initialCursor =
       this.upgradeSequenceReaderService.getInitialCursorForNewWorkspace(
         lastAttemptedInstanceCommand,
+        await this.upgradeMigrationService.getCompletedInstanceCommandNames(),
       );
 
     const executedByVersion =

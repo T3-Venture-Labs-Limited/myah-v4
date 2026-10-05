@@ -135,6 +135,44 @@ describe('UpgradeSequenceReaderService', () => {
       expect(result).toEqual({ name: 'Wc1', status: 'completed' });
     });
 
+    it('should skip later instance commands that already completed (late-added fast command)', async () => {
+      // 2.20 in production: a fast command added after the slow command had
+      // run is the latest attempt, but sits before it in the sequence.
+      const sequence = [
+        makeFastInstance('Ic0'),
+        makeFastInstance('IcLate'),
+        makeStep('slow-instance', 'Is0'),
+        makeWorkspace('Wc0'),
+        makeWorkspace('Wc1'),
+      ];
+
+      const service = await buildServiceWithMockedSequence(sequence);
+
+      const result = service.getInitialCursorForNewWorkspace(
+        { name: 'IcLate', status: 'completed' },
+        new Set(['Ic0', 'IcLate', 'Is0']),
+      );
+
+      expect(result).toEqual({ name: 'Wc1', status: 'completed' });
+    });
+
+    it('should not skip a later instance command that has not completed', async () => {
+      const sequence = [
+        makeFastInstance('IcLate'),
+        makeStep('slow-instance', 'Is0'),
+        makeWorkspace('Wc0'),
+      ];
+
+      const service = await buildServiceWithMockedSequence(sequence);
+
+      const result = service.getInitialCursorForNewWorkspace(
+        { name: 'IcLate', status: 'completed' },
+        new Set(['IcLate']),
+      );
+
+      expect(result).toEqual({ name: 'IcLate', status: 'completed' });
+    });
+
     it('should stop at next instance command boundary', async () => {
       const sequence = [
         makeFastInstance('Ic0'),

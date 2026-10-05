@@ -91,6 +91,7 @@ export class DevSeederService {
     const initialCursor =
       this.upgradeSequenceReaderService.getInitialCursorForNewWorkspace(
         lastAttemptedInstanceCommand,
+        await this.upgradeMigrationService.getCompletedInstanceCommandNames(),
       );
 
     await this.seedCoreSchema({

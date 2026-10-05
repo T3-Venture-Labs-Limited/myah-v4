@@ -162,22 +162,39 @@ export class UpgradeSequenceReaderService {
       : workspaceCommands.slice(cursorIndex);
   }
 
-  getInitialCursorForNewWorkspace(lastAttemptedInstanceCommand: {
-    name: string;
-    status: UpgradeMigrationStatus;
-  }): {
+  getInitialCursorForNewWorkspace(
+    lastAttemptedInstanceCommand: {
+      name: string;
+      status: UpgradeMigrationStatus;
+    },
+    // Instance steps already completed on this server. A late-added fast step
+    // can be the most recent attempt while later-positioned instance steps ran
+    // earlier; a new workspace must start after them, or the next startup
+    // rejects its cursor and blocks every deploy.
+    completedInstanceStepNames: ReadonlySet<string> = new Set(),
+  ): {
     name: string;
     status: UpgradeMigrationStatus;
   } {
-    const { name, status } = lastAttemptedInstanceCommand;
+    const { status } = lastAttemptedInstanceCommand;
+    let { name } = lastAttemptedInstanceCommand;
     const sequence = this.getUpgradeSequence();
 
-    const instanceCursor = this.locateStepInSequenceOrThrow({
+    let instanceCursor = this.locateStepInSequenceOrThrow({
       sequence,
       stepName: name,
     });
 
     if (status === 'completed') {
+      while (
+        isDefined(sequence[instanceCursor + 1]) &&
+        sequence[instanceCursor + 1].kind !== 'workspace' &&
+        completedInstanceStepNames.has(sequence[instanceCursor + 1].name)
+      ) {
+        instanceCursor++;
+        name = sequence[instanceCursor].name;
+      }
+
       const nextStep = sequence[instanceCursor + 1];
 
       if (isDefined(nextStep) && nextStep.kind === 'workspace') {
