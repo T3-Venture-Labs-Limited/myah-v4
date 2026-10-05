@@ -7,4 +7,5 @@ export const MYAH_HIDDEN_OBJECT_NAME_SINGULARS: readonly string[] = [
   CoreObjectNameSingular.Workflow,
   CoreObjectNameSingular.WorkflowRun,
   CoreObjectNameSingular.WorkflowVersion,
+  'workflowAutomatedTrigger',
 ];

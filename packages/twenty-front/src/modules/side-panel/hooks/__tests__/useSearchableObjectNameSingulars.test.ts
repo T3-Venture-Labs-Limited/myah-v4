@@ -9,6 +9,7 @@ jest.mock('@/object-metadata/hooks/useReadableObjectMetadataItems', () => ({
       { nameSingular: 'workflow', isSearchable: true },
       { nameSingular: 'workflowRun', isSearchable: true },
       { nameSingular: 'workflowVersion', isSearchable: true },
+      { nameSingular: 'workflowAutomatedTrigger', isSearchable: true },
     ],
   }),
 }));
@@ -17,9 +18,20 @@ jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue', () => ({
 }));
 
 describe('useSearchableObjectNameSingulars', () => {
-  it('leaves Automations out of search (MYAH-460)', () => {
-    const { result } = renderHook(() => useSearchableObjectNameSingulars());
+  it.each([
+    null,
+    'workflow',
+    'workflowRun',
+    'workflowVersion',
+    'workflowAutomatedTrigger',
+  ])(
+    'leaves Automations out of search, including stale selected filter %s (MYAH-460)',
+    (selectedObjectNameSingular) => {
+      const { result } = renderHook(() =>
+        useSearchableObjectNameSingulars({ selectedObjectNameSingular }),
+      );
 
-    expect(result.current).toEqual(['creator']);
-  });
+      expect(result.current).toEqual(['creator']);
+    },
+  );
 });

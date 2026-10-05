@@ -19,7 +19,10 @@ export const useSearchableObjectNameSingulars = ({
   );
 
   return useMemo(() => {
-    if (isDefined(selectedObjectNameSingular)) {
+    if (
+      isDefined(selectedObjectNameSingular) &&
+      !MYAH_HIDDEN_OBJECT_NAME_SINGULARS.includes(selectedObjectNameSingular)
+    ) {
       return [selectedObjectNameSingular];
     }
 
