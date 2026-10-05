@@ -303,6 +303,47 @@ describe('ValidationStep pre-submit hooks', () => {
     expect(mockOnClose).not.toHaveBeenCalled();
   });
 
+  it.each([true, false])(
+    'submits all-existing rows only when explicitly classified as existing (%s)',
+    async (alreadyImported) => {
+      mockGetSubmissionBlockReason.mockReset().mockReturnValue(undefined);
+      const rows = [
+        {
+          __index: '1',
+          name: 'Ada',
+          __errors: { name: { level: 'error', message: 'Already exists' } },
+        },
+      ];
+      mockAddErrorsAndRunHooks.mockReset().mockReturnValue(rows);
+      mockOnSubmit.mockReset().mockResolvedValue(undefined);
+      mockContext.isAlreadyImportedRow = () => alreadyImported;
+
+      renderStep();
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+
+      if (alreadyImported) {
+        await waitFor(() => expect(mockOnClose).toHaveBeenCalled());
+        expect(mockOnSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({
+            validStructuredRows: [],
+            allStructuredRows: rows,
+          }),
+          expect.any(File),
+        );
+        expect(mockEnqueueDialog).not.toHaveBeenCalled();
+      } else {
+        await waitFor(() =>
+          expect(mockEnqueueDialog).toHaveBeenCalledWith(
+            expect.objectContaining({
+              message: 'No valid rows remain to import.',
+            }),
+          ),
+        );
+        expect(mockOnSubmit).not.toHaveBeenCalled();
+      }
+    },
+  );
+
   it('preserves generic submission when optional callbacks are absent', async () => {
     mockContext.beforeSubmitHook = undefined;
     mockContext.getSubmissionBlockReason = undefined;

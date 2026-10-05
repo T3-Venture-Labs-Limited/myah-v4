@@ -1,5 +1,4 @@
-import { useContextStoreObjectMetadataItemOrThrow } from '@/context-store/hooks/useContextStoreObjectMetadataItemOrThrow';
-import { spreadsheetImportFilterAvailableFieldMetadataItems } from '@/object-record/spreadsheet-import/utils/spreadsheetImportFilterAvailableFieldMetadataItems';
+import { useSpreadsheetImportInternal } from '@/spreadsheet-import/hooks/useSpreadsheetImportInternal';
 import { getCompositeSubFieldLabelWithFieldLabel } from '@/object-record/spreadsheet-import/utils/spreadsheetImportGetCompositeSubFieldLabelWithFieldLabel';
 import { SETTINGS_COMPOSITE_FIELD_TYPE_CONFIGS } from '@/settings/data-model/constants/SettingsCompositeFieldTypeConfigs';
 import { SETTINGS_NON_COMPOSITE_FIELD_TYPE_CONFIGS } from '@/settings/data-model/constants/SettingsNonCompositeFieldTypeConfigs';
@@ -9,12 +8,8 @@ import { saveAs } from 'file-saver';
 import { FieldMetadataType } from 'twenty-shared/types';
 
 export const useDownloadFakeRecords = () => {
-  const { objectMetadataItem } = useContextStoreObjectMetadataItemOrThrow();
-
-  const availableFieldMetadataItems =
-    spreadsheetImportFilterAvailableFieldMetadataItems(
-      objectMetadataItem.updatableFields,
-    );
+  const { availableFieldMetadataItems, sampleFileName } =
+    useSpreadsheetImportInternal();
 
   const buildTableWithFakeRecords = () => {
     const headerRow: string[] = [];
@@ -138,7 +133,7 @@ export const useDownloadFakeRecords = () => {
     const { headerRow, bodyRows } = buildTableWithFakeRecords();
     const csvContent = formatToCsvContent([headerRow, ...bodyRows]);
     const blob = new Blob(csvContent, { type: 'text/csv' });
-    saveAs(blob, `${objectMetadataItem.labelPlural.toLowerCase()}-sample.csv`);
+    saveAs(blob, sampleFileName ?? 'import-sample.csv');
   };
 
   return { downloadSample };

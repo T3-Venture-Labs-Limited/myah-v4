@@ -142,6 +142,7 @@ export const ValidationStep = ({
     beforeSubmitHook,
     getSubmissionBlockReason,
     getValidationPreview,
+    isAlreadyImportedRow,
   } = useSpreadsheetImportInternal();
 
   const [data, setData] = useState<
@@ -365,6 +366,7 @@ export const ValidationStep = ({
 
       const hasValidData = refreshedRows.some(
         (value) =>
+          isAlreadyImportedRow?.(value) ||
           !isDefined(value.__errors) ||
           !Object.values(value.__errors).some(
             (error) => error.level === 'error',
@@ -381,6 +383,7 @@ export const ValidationStep = ({
       }
 
       const invalidData = refreshedRows.find((value) => {
+        if (isAlreadyImportedRow?.(value)) return false;
         if (isDefined(value?.__errors)) {
           return !!Object.values(value.__errors)?.filter(
             (err) => err.level === 'error',
