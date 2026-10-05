@@ -57,15 +57,18 @@ export const toCanonicalSocialProfileRecord = <
 export const retireSocialProfiles = async (
   apolloMetadataClient: ApolloClient,
   ids: readonly string[],
+  signal?: AbortSignal,
 ): Promise<ObjectRecord[]> => {
   const retired: ObjectRecord[] = [];
   for (const id of ids) {
+    signal?.throwIfAborted();
     const { data } = await apolloMetadataClient.mutate<{
       retireSocialProfile: ObjectRecord;
     }>({
       mutation: RETIRE_SOCIAL_PROFILE,
       fetchPolicy: 'no-cache',
       variables: { input: { id } },
+      context: { fetchOptions: { signal } },
     });
     if (data?.retireSocialProfile)
       retired.push(toCanonicalSocialProfileRecord(data.retireSocialProfile));

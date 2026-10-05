@@ -40,12 +40,15 @@ export const useDeleteManyRecords = ({
   const { upsertRecordsInStore } = useUpsertRecordsInStore();
   const apiConfig = useAtomStateValue(apiConfigState);
 
-  const mutationPageSize =
-    apiConfig?.mutationMaximumAffectedRecords ?? DEFAULT_MUTATION_BATCH_SIZE;
+  const isManagedSocialProfile = objectNameSingular === 'socialProfile';
+  // Each managed removal is its own transaction: roll back only that row.
+  const mutationPageSize = isManagedSocialProfile
+    ? 1
+    : (apiConfig?.mutationMaximumAffectedRecords ??
+      DEFAULT_MUTATION_BATCH_SIZE);
 
   const apolloCoreClient = useApolloCoreClient();
   const apolloMetadataClient = useApolloClient();
-  const isManagedSocialProfile = objectNameSingular === 'socialProfile';
 
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular,

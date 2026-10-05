@@ -76,7 +76,7 @@ jest.mock('@/object-record/record-store/hooks/useUpsertRecordsInStore', () => ({
   }),
 }));
 jest.mock('@/object-record/cache/hooks/useGetRecordFromCache', () => ({
-  useGetRecordFromCache: () => () => mockCachedRecord,
+  useGetRecordFromCache: () => (id: string) => ({ ...mockCachedRecord, id }),
 }));
 jest.mock('@/object-record/hooks/useDeleteOneRecordMutation', () => ({
   useDeleteOneRecordMutation: () => ({
@@ -361,6 +361,34 @@ describe('managed SocialProfile record operations', () => {
     });
 
     expectEachProfileRetired();
+  });
+
+  it('does not restore a successfully retired profile when the next removal fails', async () => {
+    mockMetadataMutate.mockImplementation(({ variables }) =>
+      variables.input.id === 'p2'
+        ? Promise.reject(new Error('Removal rejected'))
+        : Promise.resolve({
+            data: {
+              retireSocialProfile: {
+                id: 'p1',
+                deletedAt: '2026-10-05T00:00:00Z',
+              },
+            },
+          }),
+    );
+    const { result } = renderHook(() =>
+      useDeleteManyRecords({ objectNameSingular: 'socialProfile' }),
+    );
+    await act(async () => {
+      await expect(
+        result.current.deleteManyRecords({ recordIdsToDelete: ['p1', 'p2'] }),
+      ).rejects.toThrow('Removal rejected');
+    });
+    const restoredIds = mockUpdateRecordFromCache.mock.calls
+      .map(([options]) => options.record)
+      .filter((record) => record.deletedAt === null)
+      .map((record) => record.id);
+    expect(restoredIds).toEqual(['p2']);
   });
 
   it('removes each SocialProfile with the managed mutation in incrementalDeleteManyRecords', async () => {

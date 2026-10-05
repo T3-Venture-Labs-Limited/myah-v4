@@ -45,11 +45,11 @@ export const useIncrementalDeleteManyRecords = <T>({
 }: UseIncrementalDeleteManyRecordsParams<T>) => {
   const { upsertRecordsInStore } = useUpsertRecordsInStore();
 
-  const mutationPageSize = pageSize;
+  const isManagedSocialProfile = objectNameSingular === 'socialProfile';
+  const mutationPageSize = isManagedSocialProfile ? 1 : pageSize;
 
   const apolloCoreClient = useApolloCoreClient();
   const apolloMetadataClient = useApolloClient();
-  const isManagedSocialProfile = objectNameSingular === 'socialProfile';
 
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular,
@@ -171,7 +171,11 @@ export const useIncrementalDeleteManyRecords = <T>({
 
       await (
         isManagedSocialProfile
-          ? retireSocialProfiles(apolloMetadataClient, batchedIdsToDelete)
+          ? retireSocialProfiles(
+              apolloMetadataClient,
+              batchedIdsToDelete,
+              abortSignal,
+            )
           : apolloCoreClient.mutate<Record<string, ObjectRecord[]>>({
               mutation: deleteManyRecordsMutation,
               variables: {
