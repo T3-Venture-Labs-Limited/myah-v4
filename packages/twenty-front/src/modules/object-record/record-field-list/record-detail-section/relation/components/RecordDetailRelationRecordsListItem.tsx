@@ -242,11 +242,15 @@ export const RecordDetailRelationRecordsListItem = ({
             dropdownComponents={
               <DropdownContent>
                 <DropdownMenuItemsContainer>
-                  <MenuItem
-                    LeftIcon={IconUnlink}
-                    text={t`Detach`}
-                    onClick={handleDetach}
-                  />
+                  {/* A social profile always belongs to its creator, so it
+                      can only be deleted, not detached (MYAH-458). */}
+                  {relationObjectMetadataNameSingular !== 'socialProfile' && (
+                    <MenuItem
+                      LeftIcon={IconUnlink}
+                      text={t`Detach`}
+                      onClick={handleDetach}
+                    />
+                  )}
                   {!isAccountOwnerRelation &&
                     relationObjectPermissions.canSoftDeleteObjectRecords && (
                       <MenuItem
