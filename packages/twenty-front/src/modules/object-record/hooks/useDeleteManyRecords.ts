@@ -1,3 +1,5 @@
+import { useApolloClient } from '@apollo/client/react';
+import { retireSocialProfiles } from '@/myah/creator-crm/socialProfileOperations';
 import { triggerUpdateRecordOptimisticEffectByBatch } from '@/apollo/optimistic-effect/utils/triggerUpdateRecordOptimisticEffectByBatch';
 import { dispatchObjectRecordOperationBrowserEvent } from '@/browser-event/utils/dispatchObjectRecordOperationBrowserEvent';
 import { apiConfigState } from '@/client-config/states/apiConfigState';
@@ -42,6 +44,8 @@ export const useDeleteManyRecords = ({
     apiConfig?.mutationMaximumAffectedRecords ?? DEFAULT_MUTATION_BATCH_SIZE;
 
   const apolloCoreClient = useApolloCoreClient();
+  const apolloMetadataClient = useApolloClient();
+  const isManagedSocialProfile = objectNameSingular === 'socialProfile';
 
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular,
@@ -141,79 +145,81 @@ export const useDeleteManyRecords = ({
         });
       }
 
-      const deletedRecordsResponse = await apolloCoreClient
-        .mutate<Record<string, ObjectRecord[]>>({
-          mutation: deleteManyRecordsMutation,
-          variables: {
-            filter: { id: { in: batchedIdsToDelete } },
-          },
-        })
-        .catch((error: Error) => {
-          if (skipOptimisticEffect) {
-            throw error;
-          }
+      const deletedRecordsResponse = await (
+        isManagedSocialProfile
+          ? retireSocialProfiles(apolloMetadataClient, batchedIdsToDelete).then(
+              (records) => ({ data: { [mutationResponseField]: records } }),
+            )
+          : apolloCoreClient.mutate<Record<string, ObjectRecord[]>>({
+              mutation: deleteManyRecordsMutation,
+              variables: {
+                filter: { id: { in: batchedIdsToDelete } },
+              },
+            })
+      ).catch((error: Error) => {
+        if (skipOptimisticEffect) {
+          throw error;
+        }
 
-          const cachedRecordsNode: RecordGqlNode[] = [];
-          const computedOptimisticRecordsNode: RecordGqlNode[] = [];
+        const cachedRecordsNode: RecordGqlNode[] = [];
+        const computedOptimisticRecordsNode: RecordGqlNode[] = [];
 
-          const recordGqlFields = {
-            deletedAt: true,
-          };
-          cachedRecords.forEach((cachedRecord) => {
-            updateRecordFromCache({
-              objectMetadataItems,
+        const recordGqlFields = {
+          deletedAt: true,
+        };
+        cachedRecords.forEach((cachedRecord) => {
+          updateRecordFromCache({
+            objectMetadataItems,
+            objectMetadataItem,
+            cache: apolloCoreClient.cache,
+            record: { ...cachedRecord, deletedAt: null },
+            recordGqlFields,
+            objectPermissionsByObjectMetadataId,
+          });
+
+          const cachedRecordWithConnection =
+            getRecordNodeFromRecord<ObjectRecord>({
+              record: cachedRecord,
               objectMetadataItem,
-              cache: apolloCoreClient.cache,
-              record: { ...cachedRecord, deletedAt: null },
-              recordGqlFields,
-              objectPermissionsByObjectMetadataId,
+              objectMetadataItems,
+              computeReferences: false,
             });
 
-            const cachedRecordWithConnection =
-              getRecordNodeFromRecord<ObjectRecord>({
-                record: cachedRecord,
-                objectMetadataItem,
-                objectMetadataItems,
-                computeReferences: false,
-              });
+          const computedOptimisticRecord = {
+            ...cachedRecord,
+            deletedAt: currentTimestamp,
+            __typename: getObjectTypename(objectMetadataItem.nameSingular),
+          };
 
-            const computedOptimisticRecord = {
-              ...cachedRecord,
-              deletedAt: currentTimestamp,
-              __typename: getObjectTypename(objectMetadataItem.nameSingular),
-            };
+          const optimisticRecordWithConnection =
+            getRecordNodeFromRecord<ObjectRecord>({
+              record: computedOptimisticRecord,
+              objectMetadataItem,
+              objectMetadataItems,
+              computeReferences: false,
+            });
 
-            const optimisticRecordWithConnection =
-              getRecordNodeFromRecord<ObjectRecord>({
-                record: computedOptimisticRecord,
-                objectMetadataItem,
-                objectMetadataItems,
-                computeReferences: false,
-              });
-
-            if (
-              isDefined(optimisticRecordWithConnection) &&
-              isDefined(cachedRecordWithConnection)
-            ) {
-              cachedRecordsNode.push(cachedRecordWithConnection);
-              computedOptimisticRecordsNode.push(
-                optimisticRecordWithConnection,
-              );
-            }
-          });
-
-          triggerUpdateRecordOptimisticEffectByBatch({
-            cache: apolloCoreClient.cache,
-            objectMetadataItem,
-            currentRecords: computedOptimisticRecordsNode,
-            updatedRecords: cachedRecordsNode,
-            objectMetadataItems,
-            objectPermissionsByObjectMetadataId,
-            upsertRecordsInStore,
-          });
-
-          throw error;
+          if (
+            isDefined(optimisticRecordWithConnection) &&
+            isDefined(cachedRecordWithConnection)
+          ) {
+            cachedRecordsNode.push(cachedRecordWithConnection);
+            computedOptimisticRecordsNode.push(optimisticRecordWithConnection);
+          }
         });
+
+        triggerUpdateRecordOptimisticEffectByBatch({
+          cache: apolloCoreClient.cache,
+          objectMetadataItem,
+          currentRecords: computedOptimisticRecordsNode,
+          updatedRecords: cachedRecordsNode,
+          objectMetadataItems,
+          objectPermissionsByObjectMetadataId,
+          upsertRecordsInStore,
+        });
+
+        throw error;
+      });
 
       const deletedRecordsForThisBatch =
         deletedRecordsResponse.data?.[mutationResponseField] ?? [];

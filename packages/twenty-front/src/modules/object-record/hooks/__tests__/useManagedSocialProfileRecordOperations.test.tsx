@@ -6,7 +6,9 @@ import {
   RETIRE_SOCIAL_PROFILE,
   UPDATE_SOCIAL_PROFILE_IDENTITY,
 } from '@/myah/creator-crm/socialProfileOperations';
+import { useDeleteManyRecords } from '@/object-record/hooks/useDeleteManyRecords';
 import { useDeleteOneRecord } from '@/object-record/hooks/useDeleteOneRecord';
+import { useIncrementalDeleteManyRecords } from '@/object-record/hooks/useIncrementalDeleteManyRecords';
 import { useRestoreManyRecords } from '@/object-record/hooks/useRestoreManyRecords';
 import { useUpdateOneRecord } from '@/object-record/hooks/useUpdateOneRecord';
 
@@ -79,6 +81,42 @@ jest.mock('@/object-record/cache/hooks/useGetRecordFromCache', () => ({
 jest.mock('@/object-record/hooks/useDeleteOneRecordMutation', () => ({
   useDeleteOneRecordMutation: () => ({
     deleteOneRecordMutation: mockGenericDelete,
+  }),
+}));
+jest.mock(
+  '@/apollo/optimistic-effect/utils/triggerUpdateRecordOptimisticEffectByBatch',
+  () => ({ triggerUpdateRecordOptimisticEffectByBatch: jest.fn() }),
+);
+jest.mock('@/object-record/hooks/useDeleteManyRecordsMutation', () => ({
+  useDeleteManyRecordsMutation: () => ({
+    deleteManyRecordsMutation: mockGenericDelete,
+  }),
+}));
+jest.mock(
+  '@/navigation-menu-item/common/hooks/useRemoveNavigationMenuItemByTargetRecordId',
+  () => ({
+    useRemoveNavigationMenuItemByTargetRecordId: () => ({
+      removeNavigationMenuItemsByTargetRecordIds: jest.fn(),
+    }),
+  }),
+);
+jest.mock('@/object-record/hooks/useIncrementalFetchAndMutateRecords', () => ({
+  useIncrementalFetchAndMutateRecords: () => ({
+    incrementalFetchAndMutate: (
+      mutate: (batch: {
+        recordIds: string[];
+        totalCount: number;
+        abortSignal: AbortSignal;
+      }) => Promise<void>,
+    ) =>
+      mutate({
+        recordIds: ['p1', 'p2'],
+        totalCount: 2,
+        abortSignal: new AbortController().signal,
+      }),
+    progress: {},
+    isProcessing: false,
+    updateProgress: jest.fn(),
   }),
 }));
 jest.mock('@/object-record/hooks/useRestoreManyRecordsMutation', () => ({
@@ -295,5 +333,49 @@ describe('managed SocialProfile record operations', () => {
         }),
       }),
     );
+  });
+
+  // MYAH-458: the Delete command uses the many-record paths.
+  const expectEachProfileRetired = () => {
+    expect(
+      mockMetadataMutate.mock.calls.map(([options]) => [
+        options.mutation,
+        options.variables,
+      ]),
+    ).toEqual([
+      [RETIRE_SOCIAL_PROFILE, { input: { id: 'p1' } }],
+      [RETIRE_SOCIAL_PROFILE, { input: { id: 'p2' } }],
+    ]);
+    expect(mockCoreMutate).not.toHaveBeenCalled();
+  };
+
+  it('removes each SocialProfile with the managed mutation in deleteManyRecords', async () => {
+    const { result } = renderHook(() =>
+      useDeleteManyRecords({ objectNameSingular: 'socialProfile' }),
+    );
+
+    await act(async () => {
+      await result.current.deleteManyRecords({
+        recordIdsToDelete: ['p1', 'p2'],
+      });
+    });
+
+    expectEachProfileRetired();
+  });
+
+  it('removes each SocialProfile with the managed mutation in incrementalDeleteManyRecords', async () => {
+    const { result } = renderHook(() =>
+      useIncrementalDeleteManyRecords({
+        objectNameSingular: 'socialProfile',
+        filter: { id: { in: ['p1', 'p2'] } },
+        delayInMsBetweenMutations: 0,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.incrementalDeleteManyRecords();
+    });
+
+    expectEachProfileRetired();
   });
 });

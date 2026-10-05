@@ -1,4 +1,4 @@
-import { gql } from '@apollo/client';
+import { type ApolloClient, gql } from '@apollo/client';
 
 import { getObjectTypename } from '@/object-record/cache/utils/getObjectTypename';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
@@ -51,6 +51,27 @@ export const toCanonicalSocialProfileRecord = <
   ...record,
   __typename: getObjectTypename('socialProfile'),
 });
+
+// Social profiles are removed one at a time through the managed mutation;
+// the generic deleteMany is rejected for this object (MYAH-458).
+export const retireSocialProfiles = async (
+  apolloMetadataClient: ApolloClient,
+  ids: readonly string[],
+): Promise<ObjectRecord[]> => {
+  const retired: ObjectRecord[] = [];
+  for (const id of ids) {
+    const { data } = await apolloMetadataClient.mutate<{
+      retireSocialProfile: ObjectRecord;
+    }>({
+      mutation: RETIRE_SOCIAL_PROFILE,
+      fetchPolicy: 'no-cache',
+      variables: { input: { id } },
+    });
+    if (data?.retireSocialProfile)
+      retired.push(toCanonicalSocialProfileRecord(data.retireSocialProfile));
+  }
+  return retired;
+};
 
 const socialProfileIdentityFieldNames = new Set([
   'platform',

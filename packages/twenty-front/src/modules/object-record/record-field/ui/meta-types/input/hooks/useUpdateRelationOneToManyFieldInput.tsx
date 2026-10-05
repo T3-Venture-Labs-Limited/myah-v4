@@ -1,6 +1,7 @@
 import { useCallback, useContext } from 'react';
 
 import { useObjectMetadataItem } from '@/object-metadata/hooks/useObjectMetadataItem';
+import { useDeleteOneRecord } from '@/object-record/hooks/useDeleteOneRecord';
 import { useRecordOneToManyFieldAttachTargetRecord } from '@/object-record/hooks/useRecordOneToManyFieldAttachTargetRecord';
 import { useRecordOneToManyFieldDetachTargetRecord } from '@/object-record/hooks/useRecordOneToManyFieldDetachTargetRecord';
 import { FieldContext } from '@/object-record/record-field/ui/contexts/FieldContext';
@@ -51,6 +52,16 @@ export const useUpdateRelationOneToManyFieldInput = () => {
   const { recordOneToManyFieldAttachTargetRecord } =
     useRecordOneToManyFieldAttachTargetRecord();
 
+  // A social profile can't exist without its creator, so unselecting one
+  // removes it instead of detaching it (MYAH-458).
+  const isSocialProfileRelation =
+    fieldDefinition.metadata.relationObjectMetadataNameSingular ===
+    'socialProfile';
+  const { deleteOneRecord: removeSocialProfile } = useDeleteOneRecord({
+    objectNameSingular:
+      fieldDefinition.metadata.relationObjectMetadataNameSingular,
+  });
+
   const updateRelation = useCallback(
     async (morphItem: RecordPickerPickableMorphItem) => {
       if (
@@ -96,6 +107,8 @@ export const useUpdateRelationOneToManyFieldInput = () => {
           sourceRecordId: recordId,
           targetRecordId: morphItem.recordId,
         });
+      } else if (isSocialProfileRelation) {
+        await removeSocialProfile(morphItem.recordId);
       } else {
         await recordOneToManyFieldDetachTargetRecord({
           sourceObjectNameSingular:
@@ -109,6 +122,8 @@ export const useUpdateRelationOneToManyFieldInput = () => {
       }
     },
     [
+      isSocialProfileRelation,
+      removeSocialProfile,
       fieldDefinition.metadata.objectMetadataNameSingular,
       fieldDefinition.metadata.relationObjectMetadataNameSingular,
       fieldDefinition.metadata.targetFieldMetadataName,
