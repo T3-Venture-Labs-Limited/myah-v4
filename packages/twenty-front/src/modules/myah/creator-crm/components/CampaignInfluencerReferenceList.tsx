@@ -1,3 +1,4 @@
+import { myahReplyAgentFailureText } from '@/myah/agent/components/MyahReplyAgentFailureReason';
 import { useTextFieldFocusProps } from '@/ui/utilities/focus/hooks/useTextFieldFocusProps';
 import { useQuery } from '@apollo/client/react';
 import { useListenToObjectRecordOperationBrowserEvent } from '@/browser-event/hooks/useListenToObjectRecordOperationBrowserEvent';
@@ -244,7 +245,11 @@ const NextAction = ({ node }: { node?: MyahReplyAgentReviewNode }) => {
     );
   }
   if (node.nextAction === 'NEEDS_YOU' && node.reason)
-    return <StyledWarning>Needs you · {node.reason}</StyledWarning>;
+    return (
+      <StyledWarning>
+        Needs you · {myahReplyAgentFailureText(node.reason)}
+      </StyledWarning>
+    );
   if (node.nextAction === 'SKIPPED' || node.nextAction === 'NOT_CONTACTABLE')
     return <StyledWarning>{node.reason}</StyledWarning>;
   return (

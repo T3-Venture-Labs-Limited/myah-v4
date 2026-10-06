@@ -23,11 +23,16 @@ const UsageExhaustedReason = () => {
   );
 };
 
-export const MyahReplyAgentFailureReason = ({ reason }: { reason: string }) =>
-  // Existing stored runs retain the pre-MYAH-463 wording until regenerated.
+// Existing stored runs retain the pre-MYAH-463 wording until regenerated.
+const isUsageExhausted = (reason: string) =>
   reason.startsWith('Your AI usage is used up.') ||
-  reason.startsWith('AI credit is used up.') ? (
-    <UsageExhaustedReason />
-  ) : (
-    <>{reason}</>
-  );
+  reason.startsWith('AI credit is used up.');
+
+// Plain-text form for places that cannot hold a link (clickable rows).
+export const myahReplyAgentFailureText = (reason: string) =>
+  isUsageExhausted(reason)
+    ? 'Your AI usage is used up. Review Billing, then regenerate, or reply yourself.'
+    : reason;
+
+export const MyahReplyAgentFailureReason = ({ reason }: { reason: string }) =>
+  isUsageExhausted(reason) ? <UsageExhaustedReason /> : <>{reason}</>;
