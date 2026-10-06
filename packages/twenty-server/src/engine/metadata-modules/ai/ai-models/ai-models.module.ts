@@ -1,4 +1,5 @@
 import { Global, Module } from '@nestjs/common';
+import { MyahSubscriptionModule } from 'src/engine/core-modules/myah-subscription/myah-subscription.module';
 
 import { ManagedProviderBillingModule } from 'src/engine/core-modules/managed-provider-billing/managed-provider-billing.module';
 import { MetricsModule } from 'src/engine/core-modules/metrics/metrics.module';
@@ -15,7 +16,11 @@ import { SdkProviderFactoryService } from 'src/engine/metadata-modules/ai/ai-mod
 
 @Global()
 @Module({
-  imports: [MetricsModule, ManagedProviderBillingModule],
+  imports: [
+    MetricsModule,
+    ManagedProviderBillingModule,
+    MyahSubscriptionModule,
+  ],
   providers: [
     DefaultAiCatalogService,
     ProviderConfigService,

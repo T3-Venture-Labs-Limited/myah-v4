@@ -171,6 +171,9 @@ export class ClientConfigService {
 
     const clientConfig: ClientConfig = {
       appVersion: this.twentyConfigService.get('APP_VERSION'),
+      isMyahSubscriptionRequired: this.twentyConfigService.get(
+        'MYAH_SUBSCRIPTION_REQUIRED',
+      ),
       billing: {
         isBillingEnabled: this.twentyConfigService.get('IS_BILLING_ENABLED'),
         billingUrl: this.twentyConfigService.get('BILLING_PLAN_REQUIRED_LINK'),

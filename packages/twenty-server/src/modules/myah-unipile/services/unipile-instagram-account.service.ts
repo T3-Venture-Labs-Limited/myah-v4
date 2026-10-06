@@ -2,6 +2,7 @@ import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Not, type EntityManager, type Repository } from 'typeorm';
 
+import { MyahWorkspaceSubscriptionEntity } from 'src/engine/core-modules/myah-subscription/entities/myah-workspace-subscription.entity';
 import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { UnipileHostedAuthAttemptOperation } from 'src/modules/myah-unipile/entities/unipile-hosted-auth-attempt.entity';
 import {
@@ -207,6 +208,7 @@ export class UnipileInstagramAccountService {
           binding.deactivatedAt = null;
 
           await bindingRepository.save(binding);
+          await this.clearLapseFlag(manager, input.workspaceId);
 
           return;
         }
@@ -243,6 +245,7 @@ export class UnipileInstagramAccountService {
             ownerBinding.status !==
               UnipileInstagramAccountBindingStatus.INACTIVE
           ) {
+            await this.clearLapseFlag(manager, input.workspaceId);
             return;
           }
 
@@ -283,14 +286,40 @@ export class UnipileInstagramAccountService {
         });
 
         await bindingRepository.save(binding);
+        await this.clearLapseFlag(manager, input.workspaceId);
       },
       input.coreManager,
     );
   }
 
+  private async clearLapseFlag(manager: EntityManager, workspaceId: string) {
+    await manager
+      .getRepository(MyahWorkspaceSubscriptionEntity)
+      .update({ workspaceId }, { instagramDisconnectedForLapseAt: null });
+  }
+
+  async disconnectWorkspaceAccount(workspaceId: string): Promise<void> {
+    const binding = await this.bindingRepository.findOne({
+      where: {
+        workspaceId,
+        status: Not(UnipileInstagramAccountBindingStatus.INACTIVE),
+        deactivatedAt: IsNull(),
+      },
+    });
+    if (!binding) return;
+    const result = await this.disconnectAccount({
+      workspaceId,
+      userWorkspaceId: null,
+    });
+    if (result.status === 'PENDING_RECOVERY')
+      throw new ConflictException(
+        'Instagram disconnection is being confirmed. Please try again shortly.',
+      );
+  }
+
   async disconnectAccount(input: {
     workspaceId: string;
-    userWorkspaceId: string;
+    userWorkspaceId: string | null;
   }): Promise<{ status: 'DISCONNECTED' | 'PENDING_RECOVERY' }> {
     this.availabilityService.assertEnabled();
 
@@ -343,6 +372,7 @@ export class UnipileInstagramAccountService {
 
             const workspace = await workspaceRepository.findOne({
               where: { id: input.workspaceId },
+              withDeleted: true,
             });
 
             if (!workspace) {
@@ -671,6 +701,7 @@ export class UnipileInstagramAccountService {
 
         const workspace = await workspaceRepository.findOne({
           where: { id: currentBinding.workspaceId },
+          withDeleted: true,
         });
 
         if (!workspace) {

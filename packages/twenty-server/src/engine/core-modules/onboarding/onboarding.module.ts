@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { MyahSubscriptionModule } from 'src/engine/core-modules/myah-subscription/myah-subscription.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { BillingModule } from 'src/engine/core-modules/billing/billing.module';
@@ -9,6 +10,7 @@ import { WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.ent
 
 @Module({
   imports: [
+    MyahSubscriptionModule,
     BillingModule,
     UserVarsModule,
     TypeOrmModule.forFeature([WorkspaceEntity]),

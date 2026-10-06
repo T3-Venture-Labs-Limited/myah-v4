@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { MyahUsageService } from 'src/engine/core-modules/myah-subscription/myah-usage.service';
 
 import { ConnectedAccountProvider } from 'twenty-shared/types';
 import { assertUnreachable } from 'twenty-shared/utils';
@@ -20,6 +21,7 @@ export class MessagingMessageOutboundService {
     private readonly microsoftMessageOutboundService: MicrosoftMessageOutboundService,
     private readonly imapSmtpMessageOutboundService: ImapSmtpMessageOutboundService,
     private readonly emailGroupMessageOutboundService: EmailGroupMessageOutboundService,
+    private readonly myahUsage: MyahUsageService,
   ) {}
 
   public getProviderRequestTimeoutMs(
@@ -31,6 +33,7 @@ export class MessagingMessageOutboundService {
   public async assertConnectedAccountSendable(
     connectedAccount: ConnectedAccountEntity,
   ): Promise<void> {
+    await this.myahUsage.assertCanAct(connectedAccount.workspaceId);
     switch (connectedAccount.provider) {
       case ConnectedAccountProvider.GOOGLE:
         return this.gmailMessageOutboundService.assertSendable(
@@ -66,6 +69,7 @@ export class MessagingMessageOutboundService {
     sendMessageInput: SendMessageInput,
     connectedAccount: ConnectedAccountEntity,
   ): Promise<SendMessageResult> {
+    await this.myahUsage.assertCanAct(connectedAccount.workspaceId);
     switch (connectedAccount.provider) {
       case ConnectedAccountProvider.GOOGLE:
         return this.gmailMessageOutboundService.sendMessage(
@@ -202,6 +206,7 @@ export class MessagingMessageOutboundService {
     sendMessageInput: SendMessageInput,
     connectedAccount: ConnectedAccountEntity,
   ): Promise<SendMessageResult> {
+    await this.myahUsage.assertCanAct(connectedAccount.workspaceId);
     switch (connectedAccount.provider) {
       case ConnectedAccountProvider.GOOGLE:
         return this.gmailMessageOutboundService.sendDraft(

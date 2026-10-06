@@ -1,4 +1,6 @@
 import { Test, type TestingModule } from '@nestjs/testing';
+import { MyahSubscriptionSyncService } from 'src/engine/core-modules/myah-subscription/myah-subscription-sync.service';
+import { UnipileInstagramAccountService } from 'src/modules/myah-unipile/services/unipile-instagram-account.service';
 import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm';
 
 import { type DataSource, type Repository } from 'typeorm';
@@ -68,6 +70,18 @@ describe('WorkspaceService', () => {
       providers: [
         WorkspaceService,
         {
+          provide: MyahSubscriptionSyncService,
+          useValue: { cancelForWorkspaceDeletion: jest.fn() },
+        },
+        {
+          provide: UnipileInstagramAccountService,
+          useValue: { disconnectWorkspaceAccount: jest.fn() },
+        },
+        {
+          provide: TwentyConfigService,
+          useValue: { get: jest.fn().mockReturnValue(false) },
+        },
+        {
           provide: getRepositoryToken(WorkspaceEntity),
           useValue: {
             findOne: jest.fn(),
@@ -111,7 +125,6 @@ describe('WorkspaceService', () => {
           DnsManagerService,
           CustomDomainManagerService,
           SubdomainManagerService,
-          TwentyConfigService,
           ExceptionHandlerService,
           PermissionsService,
           FeatureFlagService,
@@ -381,6 +394,57 @@ describe('WorkspaceService', () => {
   });
 
   describe('deleteWorkspace', () => {
+    it.each([true, false])(
+      'cleans up Myah providers before softDelete=%s',
+      async (softDelete) => {
+        jest.spyOn(service['twentyConfigService'], 'get').mockReturnValue(true);
+        const cancel = jest.spyOn(
+          service['myahSubscriptionSyncService'],
+          'cancelForWorkspaceDeletion',
+        );
+        const disconnect = jest.spyOn(
+          service['unipileInstagramAccountService'],
+          'disconnectWorkspaceAccount',
+        );
+        jest.spyOn(workspaceRepository, 'findOne').mockResolvedValue({
+          id: 'workspace-id',
+          metadataVersion: 0,
+        } as WorkspaceEntity);
+        const members = jest
+          .spyOn(userWorkspaceRepository, 'find')
+          .mockResolvedValue([]);
+        await service.deleteWorkspace('workspace-id', softDelete);
+        expect(disconnect).toHaveBeenCalledWith('workspace-id');
+        expect(cancel).toHaveBeenCalledWith('workspace-id');
+        expect(disconnect.mock.invocationCallOrder[0]).toBeLessThan(
+          cancel.mock.invocationCallOrder[0],
+        );
+        expect(cancel.mock.invocationCallOrder[0]).toBeLessThan(
+          members.mock.invocationCallOrder[0],
+        );
+      },
+    );
+
+    it('cancels Myah billing even when the paywall is switched off, without touching Instagram', async () => {
+      jest.spyOn(service['twentyConfigService'], 'get').mockReturnValue(false);
+      const cancel = jest.spyOn(
+        service['myahSubscriptionSyncService'],
+        'cancelForWorkspaceDeletion',
+      );
+      const disconnect = jest.spyOn(
+        service['unipileInstagramAccountService'],
+        'disconnectWorkspaceAccount',
+      );
+      jest.spyOn(workspaceRepository, 'findOne').mockResolvedValue({
+        id: 'workspace-id',
+        metadataVersion: 0,
+      } as WorkspaceEntity);
+      jest.spyOn(userWorkspaceRepository, 'find').mockResolvedValue([]);
+      await service.deleteWorkspace('workspace-id', true);
+      expect(cancel).toHaveBeenCalledWith('workspace-id');
+      expect(disconnect).not.toHaveBeenCalled();
+    });
+
     it('should hard delete the workspace', async () => {
       const mockWorkspace = {
         id: 'workspace-id',

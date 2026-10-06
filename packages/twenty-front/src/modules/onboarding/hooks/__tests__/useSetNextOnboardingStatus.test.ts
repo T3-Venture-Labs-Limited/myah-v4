@@ -1,3 +1,4 @@
+import { useMyahWorkspaceUsage } from '@/settings/billing/hooks/useMyahWorkspaceUsage';
 import { act, renderHook } from '@testing-library/react';
 import { createElement } from 'react';
 import { Provider as JotaiProvider } from 'jotai';
@@ -19,6 +20,13 @@ import {
   mockCurrentWorkspace,
   mockedUserData,
 } from '~/testing/mock-data/users';
+
+jest.mock('@/settings/billing/hooks/useMyahWorkspaceUsage', () => ({
+  useMyahWorkspaceUsage: jest.fn(() => ({
+    isEnabled: false,
+    usage: undefined,
+  })),
+}));
 
 const Wrapper = ({ children }: { children: React.ReactNode }) =>
   createElement(JotaiProvider, { store: jotaiStore }, children);
@@ -84,7 +92,37 @@ const renderHooks = (
 describe('useSetNextOnboardingStatus', () => {
   beforeEach(() => {
     resetJotaiStore();
+    (useMyahWorkspaceUsage as jest.Mock).mockReturnValue({ isEnabled: false });
   });
+
+  it.each(['NEEDS_SUBSCRIPTION', 'LAPSED', undefined])(
+    'requires a plan for Myah access %s regardless of legacy billing',
+    (state) => {
+      (useMyahWorkspaceUsage as jest.Mock).mockReturnValue({
+        isEnabled: true,
+        usage: state ? { state } : undefined,
+      });
+      expect(
+        renderHooks(OnboardingStatus.INVITE_TEAM, { isBillingEnabled: false }),
+      ).toBe(OnboardingStatus.PLAN_REQUIRED);
+    },
+  );
+
+  it.each(['ACTIVE', 'PAYMENT_RETRYING', 'COMPLIMENTARY'])(
+    'does not ask for a legacy plan with Myah access %s',
+    (state) => {
+      (useMyahWorkspaceUsage as jest.Mock).mockReturnValue({
+        isEnabled: true,
+        usage: { state },
+      });
+      expect(
+        renderHooks(OnboardingStatus.INVITE_TEAM, {
+          isBillingEnabled: true,
+          withSubscription: false,
+        }),
+      ).toBe(OnboardingStatus.COMPLETED);
+    },
+  );
 
   it('should sync emails right after workspace activation', () => {
     const nextOnboardingStatus = renderHooks(

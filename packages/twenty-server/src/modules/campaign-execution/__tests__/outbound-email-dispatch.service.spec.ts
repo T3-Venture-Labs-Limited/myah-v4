@@ -1,6 +1,10 @@
 import { ConnectedAccountProvider } from 'twenty-shared/types';
 import { type EntityManager } from 'typeorm';
 
+import {
+  AiException,
+  AiExceptionCode,
+} from 'src/engine/metadata-modules/ai/ai.exception';
 import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
 import { OutboundEmailDispatchService } from 'src/modules/campaign-execution/services/outbound-email-dispatch.service';
 import {
@@ -614,6 +618,7 @@ describe('OutboundEmailDispatchService', () => {
 
   it.each([
     'WORKSPACE_NOT_ACTIVE',
+    'SUBSCRIPTION_REQUIRED',
     'CAMPAIGN_PAUSED',
     'CAMPAIGN_STOPPED',
     'AUTHORIZATION_STALE',
@@ -882,6 +887,45 @@ describe('OutboundEmailDispatchService', () => {
       }),
       expect.anything(),
     );
+  });
+
+  it('records a subscription refusal raised before the provider call as definitely unaccepted', async () => {
+    const harness = createHarness();
+    harness.outboundService.sendMessage.mockRejectedValueOnce(
+      new AiException(
+        'This workspace has no active subscription.',
+        AiExceptionCode.SUBSCRIPTION_REQUIRED,
+      ),
+    );
+
+    await expect(
+      harness.service.dispatch(dispatchInput()),
+    ).resolves.toMatchObject({ status: 'DEFINITELY_UNACCEPTED_RECORDED' });
+    expect(
+      harness.attemptService.recordDefinitelyUnaccepted,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        safeOutcomeReason: 'DEFINITELY_UNACCEPTED_RETRYABLE',
+      }),
+      expect.anything(),
+    );
+    expect(
+      harness.attemptService.markUnknownAfterDeadline,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('keeps other AI errors from sendMessage ambiguous', async () => {
+    const harness = createHarness();
+    harness.outboundService.sendMessage.mockRejectedValueOnce(
+      new AiException(
+        "This month's AI usage is used up.",
+        AiExceptionCode.INCLUDED_USAGE_EXHAUSTED,
+      ),
+    );
+
+    await expect(
+      harness.service.dispatch(dispatchInput()),
+    ).resolves.toMatchObject({ status: 'UNKNOWN_PENDING_DEADLINE' });
   });
 
   it.each(['stack', 'message', 'name'] as const)(

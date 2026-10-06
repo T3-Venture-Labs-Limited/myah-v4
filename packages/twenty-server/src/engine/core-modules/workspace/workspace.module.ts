@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { MyahSubscriptionModule } from 'src/engine/core-modules/myah-subscription/myah-subscription.module';
+import { MyahUnipileModule } from 'src/modules/myah-unipile/myah-unipile.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { NestjsQueryGraphQLModule } from '@ptc-org/nestjs-query-graphql';
@@ -55,6 +57,8 @@ import { StandardObjectsPrefillModule } from 'src/engine/workspace-manager/stand
     StandardObjectsPrefillModule,
     NestjsQueryGraphQLModule.forFeature({
       imports: [
+        MyahSubscriptionModule,
+        MyahUnipileModule,
         BillingModule,
         FileModule,
         TokenModule,

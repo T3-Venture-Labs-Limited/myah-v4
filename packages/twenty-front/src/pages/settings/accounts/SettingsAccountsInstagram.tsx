@@ -1,4 +1,5 @@
 import { getTokenPair } from '@/apollo/utils/getTokenPair';
+import { useMyahWorkspaceUsage } from '@/settings/billing/hooks/useMyahWorkspaceUsage';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
 import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
@@ -11,6 +12,7 @@ import { SettingsPath } from 'twenty-shared/types';
 import { getSettingsPath } from 'twenty-shared/utils';
 import { IconExternalLink, IconMessage, IconRefresh } from 'twenty-ui/icon';
 import { Status } from 'twenty-ui/data-display';
+import { InlineBanner } from 'twenty-ui/feedback';
 import { Button } from 'twenty-ui/input';
 import { Section } from 'twenty-ui/layout';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
@@ -113,6 +115,7 @@ const getAccessToken = () =>
 
 export const SettingsAccountsInstagram = () => {
   const { t } = useLingui();
+  const { isEnabled, hasAccess, usage } = useMyahWorkspaceUsage();
   const {
     enqueueErrorSnackBar,
     enqueueSuccessSnackBar,
@@ -127,6 +130,14 @@ export const SettingsAccountsInstagram = () => {
   const [connectingRefreshExpired, setConnectingRefreshExpired] =
     useState(false);
   const isDisconnectPending = account?.status === 'DELETE_UNKNOWN';
+  const needsLapseReconnect =
+    isEnabled &&
+    hasAccess &&
+    usage?.instagramReconnectRequired === true &&
+    !isLoadingAccounts &&
+    !loadError &&
+    account?.status !== 'ACTIVE';
+  const lapseExplanation = t`Your Instagram connection needs to be restored after your subscription ended. Reconnect the same account to resume Instagram steps. Your conversations are saved.`;
   const hostedAuthReturn = new URLSearchParams(window.location.search);
   const attemptId = hostedAuthReturn.get('attemptId');
   const didHostedAuthFail = hostedAuthReturn.get('connection') === 'failed';
@@ -330,7 +341,7 @@ export const SettingsAccountsInstagram = () => {
     path: 'connect' | 'reconnect',
     errorMessage: string,
   ) => {
-    if (isDisconnectPending) {
+    if (isDisconnectPending || !hasAccess) {
       return;
     }
 
@@ -496,7 +507,10 @@ export const SettingsAccountsInstagram = () => {
           : (account?.status ??
             'NOT_CONNECTED')) as keyof typeof statusPresentation
     ] ?? statusPresentation.UNKNOWN;
-  const statusLabel = presentation.label;
+  const statusLabel =
+    needsLapseReconnect && (account === null || account.status === 'INACTIVE')
+      ? t`Disconnected`
+      : presentation.label;
 
   return (
     <SettingsPageLayout
@@ -547,7 +561,13 @@ export const SettingsAccountsInstagram = () => {
                   ? t`You do not have permission to manage Instagram.`
                   : loadError === 'failed'
                     ? t`Could not load Instagram connection status.`
-                    : presentation.explanation}
+                    : needsLapseReconnect && !isDisconnectPending
+                      ? null
+                      : presentation.explanation}
+              </StyledDescription>
+              <StyledDescription>
+                {isEnabled &&
+                  t`Your plan includes one Instagram account. Connecting and reconnecting do not use your AI allowance.`}
               </StyledDescription>
               {connectingRefreshExpired &&
                 account?.status === 'CONNECTING' &&
@@ -594,6 +614,9 @@ export const SettingsAccountsInstagram = () => {
                 )}
               </StyledAccountRow>
             )}
+            {needsLapseReconnect && (
+              <InlineBanner color="blue" message={lapseExplanation} />
+            )}
             {loadError ? (
               <Button
                 title={t`Try again`}
@@ -604,10 +627,14 @@ export const SettingsAccountsInstagram = () => {
             ) : account === null || account.status === 'INACTIVE' ? (
               <Button
                 Icon={IconExternalLink}
-                title={t`Connect Instagram`}
+                title={
+                  needsLapseReconnect
+                    ? t`Reconnect Instagram`
+                    : t`Connect Instagram`
+                }
                 variant="primary"
                 accent="brand"
-                disabled={isLoadingAccounts || isConnecting}
+                disabled={isLoadingAccounts || isConnecting || !hasAccess}
                 isLoading={isConnecting}
                 onClick={() =>
                   void handleHostedAuth(
@@ -624,7 +651,7 @@ export const SettingsAccountsInstagram = () => {
                   title={t`Reconnect Instagram`}
                   variant="primary"
                   accent="brand"
-                  disabled={isConnecting}
+                  disabled={isConnecting || !hasAccess}
                   isLoading={isConnecting}
                   onClick={() =>
                     void handleHostedAuth(

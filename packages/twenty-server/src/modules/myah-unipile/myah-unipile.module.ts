@@ -1,4 +1,5 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
+import { MyahSubscriptionModule } from 'src/engine/core-modules/myah-subscription/myah-subscription.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AuthModule } from 'src/engine/core-modules/auth/auth.module';
@@ -21,6 +22,7 @@ import { UnipileInstagramSyncRunEntity } from 'src/modules/myah-unipile/entities
 import { UnipileInstagramWebhookEventEntity } from 'src/modules/myah-unipile/entities/unipile-instagram-webhook-event.entity';
 import { UnipileInstagramAccountRecoveryCronCommand } from 'src/modules/myah-unipile/jobs/unipile-instagram-account-recovery.cron-command';
 import { UnipileInstagramAccountRecoveryJob } from 'src/modules/myah-unipile/jobs/unipile-instagram-account-recovery.job';
+import { UnipileInstagramSubscriptionLapseJob } from 'src/modules/myah-unipile/jobs/unipile-instagram-subscription-lapse.job';
 import { UnipileInstagramSyncJob } from 'src/modules/myah-unipile/jobs/unipile-instagram-sync.job';
 import { UnipileInstagramWebhookJob } from 'src/modules/myah-unipile/jobs/unipile-instagram-webhook.job';
 import { UnipileInstagramWebhookReconciliationJob } from 'src/modules/myah-unipile/jobs/unipile-instagram-webhook-reconciliation.job';
@@ -45,7 +47,8 @@ import {
 
 @Module({
   imports: [
-    AuthModule,
+    MyahSubscriptionModule,
+    forwardRef(() => AuthModule),
     WorkspaceDomainsModule,
     MyahInboxContactTriageModule,
     PermissionsModule,
@@ -79,6 +82,7 @@ import {
     UnipileHostedAuthService,
     UnipileInstagramAccountRecoveryService,
     UnipileInstagramAccountRecoveryJob,
+    UnipileInstagramSubscriptionLapseJob,
     UnipileInstagramAccountRecoveryCronCommand,
     UnipileInstagramWebhookIntakeService,
     UnipileInstagramWebhookQueue,

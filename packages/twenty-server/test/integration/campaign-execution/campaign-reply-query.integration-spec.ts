@@ -193,7 +193,11 @@ describe('Campaign reply PostgreSQL query', () => {
     const orm = getDomainService<GlobalWorkspaceOrmManager>(
       'GlobalWorkspaceOrmManager',
     );
-    const service = new CampaignReplyService(new CampaignProgressionService());
+    const service = new CampaignReplyService(
+      new CampaignProgressionService({
+        getAccess: jest.fn(async () => 'ACTIVE'),
+      } as never),
+    );
     const inboundThreadId = randomUUID();
 
     await orm.executeInWorkspaceContext(

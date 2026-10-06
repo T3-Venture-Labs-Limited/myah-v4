@@ -67,6 +67,7 @@ export interface Options {
   onNetworkError?: (err: Error | ServerParseError | ServerError) => void;
   onTokenPairChange?: (tokenPair: AuthTokenPair) => void;
   onUnauthenticatedError?: () => void;
+  onSubscriptionRequired?: () => void;
   onAppVersionMismatch?: (message: string) => void;
   onPayloadTooLarge?: (message: string) => void;
   currentWorkspaceMember: CurrentWorkspaceMember | null;
@@ -93,6 +94,7 @@ export class ApolloFactory implements ApolloManager {
       onNetworkError,
       onTokenPairChange,
       onUnauthenticatedError,
+      onSubscriptionRequired,
       onAppVersionMismatch,
       onPayloadTooLarge,
       currentWorkspaceMember,
@@ -357,6 +359,16 @@ export class ApolloFactory implements ApolloManager {
         }
         if (CombinedGraphQLErrors.is(error)) {
           onErrorCb?.(error.errors);
+          if (
+            error.errors.some(
+              ({ extensions }) =>
+                extensions?.subCode === 'SUBSCRIPTION_REQUIRED' ||
+                extensions?.code === 'SUBSCRIPTION_REQUIRED',
+            )
+          ) {
+            onSubscriptionRequired?.();
+            return;
+          }
           for (const graphQLError of error.errors) {
             if (graphQLError.message === 'Unauthorized') {
               // oxlint-disable-next-line no-console
@@ -399,6 +411,18 @@ export class ApolloFactory implements ApolloManager {
             }
           }
         } else if (ServerError.is(error)) {
+          if (error.statusCode === 403) {
+            try {
+              if (
+                JSON.parse(error.bodyText)?.code === 'SUBSCRIPTION_REQUIRED'
+              ) {
+                onSubscriptionRequired?.();
+                return;
+              }
+            } catch {
+              // Non-JSON transport errors keep the normal network error path.
+            }
+          }
           if (
             this.isRestOperation(operation) &&
             this.isAuthenticationError(error)

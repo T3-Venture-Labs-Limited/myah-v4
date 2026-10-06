@@ -1,4 +1,7 @@
 import { Test } from '@nestjs/testing';
+import { AddMyahSubscriptionCampaignHoldFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1791224189942-add-myah-subscription-campaign-hold';
+import { VerifyExistingMyahUsersSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-slow-1791217440633-verify-existing-myah-users';
+import { CreateMyahSubscriptionAndUsageFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1791215297086-create-myah-subscription-and-usage';
 import { getDataSourceToken } from '@nestjs/typeorm';
 import { CommandMeta } from 'nest-commander/src/constants';
 import { WorkspaceIteratorService } from 'src/database/commands/command-runners/workspace-iterator.service';
@@ -33,6 +36,23 @@ import { InvalidateComposioInstagramAuthoritiesWorkspaceCommand } from 'src/data
 import { WorkspaceMigrationRunnerModule } from 'src/engine/workspace-manager/workspace-migration/workspace-migration-runner/workspace-migration-runner.module';
 
 describe('V2_20_UpgradeVersionCommandModule', () => {
+  it('registers the subscription hold schema catch-up', () => {
+    expect(INSTANCE_COMMANDS).toContain(AddMyahSubscriptionCampaignHoldFastInstanceCommand);
+    expect(getRegisteredInstanceCommandMetadata(AddMyahSubscriptionCampaignHoldFastInstanceCommand)).toMatchObject({ version: '2.20.0', type: 'fast', catchUpOnResume: true });
+  });
+  it('registers the Myah subscription and usage tables after the existing upgrades', () => {
+    expect(INSTANCE_COMMANDS).toContain(CreateMyahSubscriptionAndUsageFastInstanceCommand);
+    expect(
+      getRegisteredInstanceCommandMetadata(
+        CreateMyahSubscriptionAndUsageFastInstanceCommand,
+      ),
+    ).toMatchObject({ version: '2.20.0', timestamp: 1791215297086, type: 'fast', catchUpOnResume: true });
+  });
+  it('registers the separate verification backfill for existing instances', () => {
+    expect(INSTANCE_COMMANDS).toContain(VerifyExistingMyahUsersSlowInstanceCommand);
+    expect(getRegisteredInstanceCommandMetadata(VerifyExistingMyahUsersSlowInstanceCommand)).toMatchObject({ type: 'slow', catchUpOnResume: true });
+  });
+
   it('directly imports the workspace migration runner for social-link cache invalidation', () => {
     const imports = Reflect.getMetadata(
       MODULE_METADATA.IMPORTS,

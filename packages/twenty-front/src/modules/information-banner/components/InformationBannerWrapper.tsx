@@ -1,4 +1,6 @@
 import { styled } from '@linaria/react';
+import { isMyahSubscriptionRequiredState } from '@/client-config/states/isMyahSubscriptionRequiredState';
+import { InformationBannerMyahUsage } from '@/information-banner/components/billing/InformationBannerMyahUsage';
 import { isDefined } from 'twenty-shared/utils';
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 
@@ -30,6 +32,9 @@ const StyledInformationBannerWrapper = styled.div`
 `;
 
 export const InformationBannerWrapper = () => {
+  const isMyahSubscriptionRequired = useAtomStateValue(
+    isMyahSubscriptionRequiredState,
+  );
   const subscriptionStatus = useSubscriptionStatus();
   const permissionMap = usePermissionFlagMap();
   const isAccountSyncEnabled =
@@ -70,15 +75,21 @@ export const InformationBannerWrapper = () => {
       {isAccountSyncEnabled && (
         <InformationBannerReconnectAccountEmailAliases />
       )}
-      {displayBillingSubscriptionPausedBanner && (
-        <InformationBannerBillingSubscriptionPaused /> // TODO: remove this once paused subscriptions are deprecated
+      {isMyahSubscriptionRequired ? (
+        <InformationBannerMyahUsage />
+      ) : (
+        <>
+          {displayBillingSubscriptionPausedBanner && (
+            <InformationBannerBillingSubscriptionPaused /> // TODO: remove this once paused subscriptions are deprecated
+          )}
+          {displayBillingSubscriptionCanceledBanner && (
+            <InformationBannerNoBillingSubscription />
+          )}
+          {displayFailPaymentInfoBanner && <InformationBannerFailPaymentInfo />}
+          {displayEndTrialPeriodBanner && <InformationBannerEndTrialPeriod />}
+          {displayNoMoreCreditsBanner && <InformationBannerNoMoreCredits />}
+        </>
       )}
-      {displayBillingSubscriptionCanceledBanner && (
-        <InformationBannerNoBillingSubscription />
-      )}
-      {displayFailPaymentInfoBanner && <InformationBannerFailPaymentInfo />}
-      {displayEndTrialPeriodBanner && <InformationBannerEndTrialPeriod />}
-      {displayNoMoreCreditsBanner && <InformationBannerNoMoreCredits />}
     </StyledInformationBannerWrapper>
   );
 };

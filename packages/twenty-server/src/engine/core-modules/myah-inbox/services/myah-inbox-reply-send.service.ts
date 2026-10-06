@@ -4,6 +4,7 @@ import {
   type ReplyContext,
 } from 'src/engine/core-modules/myah-inbox/dtos/myah-inbox-reply-context.input';
 import { ForbiddenException, Injectable } from '@nestjs/common';
+import { MyahUsageService } from 'src/engine/core-modules/myah-subscription/myah-usage.service';
 
 import { isDefined, parseMyahReplyRichText } from 'twenty-shared/utils';
 
@@ -88,6 +89,7 @@ export class MyahInboxReplySendService {
     private readonly actionApprovalService: ActionApprovalService,
     private readonly actionDefinition: MyahInboxReplyActionDefinition,
     private readonly approvedExecutionService: MyahInboxReplyApprovedExecutionService,
+    private readonly myahUsage: MyahUsageService,
   ) {}
 
   private targetId(input: MyahInboxReplySendRequestContext): string {
@@ -229,6 +231,7 @@ export class MyahInboxReplySendService {
   async send(
     input: MyahInboxReplySendRequest,
   ): Promise<MyahInboxReplySendResult> {
+    await this.myahUsage.assertCanAct(input.workspace.id);
     this.assertUserRequest(input);
 
     const preparation = await this.prepareSend(input);

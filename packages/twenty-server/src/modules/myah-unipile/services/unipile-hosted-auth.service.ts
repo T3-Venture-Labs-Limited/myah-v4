@@ -17,6 +17,11 @@ import {
 } from 'typeorm';
 
 import { WorkspaceDomainsService } from 'src/engine/core-modules/domain/workspace-domains/services/workspace-domains.service';
+import { InjectMessageQueue } from 'src/engine/core-modules/message-queue/decorators/message-queue.decorator';
+import { MessageQueue } from 'src/engine/core-modules/message-queue/message-queue.constants';
+import { MessageQueueService } from 'src/engine/core-modules/message-queue/services/message-queue.service';
+import { UnipileInstagramSubscriptionLapseJob } from 'src/modules/myah-unipile/jobs/unipile-instagram-subscription-lapse.job';
+import { MyahUsageService } from 'src/engine/core-modules/myah-subscription/myah-usage.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
 import {
@@ -67,6 +72,9 @@ export class UnipileHostedAuthService {
   private readonly logger = new Logger(UnipileHostedAuthService.name);
 
   constructor(
+    private readonly myahUsageService: MyahUsageService,
+    @InjectMessageQueue(MessageQueue.workspaceQueue)
+    private readonly queue: MessageQueueService,
     // eslint-disable-next-line twenty/prefer-workspace-scoped-repository -- Public callbacks and recovery resolve attempts without workspace auth context.
     @InjectRepository(UnipileHostedAuthAttemptEntity)
     private readonly attemptRepository: Repository<UnipileHostedAuthAttemptEntity>,
@@ -91,14 +99,14 @@ export class UnipileHostedAuthService {
   }): Promise<{ attemptId: string; url: string }> {
     this.availabilityService.assertEnabled();
 
+    await this.myahUsageService.assertCanAct(workspace.id);
+
     const activeBinding = await this.bindingRepository.findOne({
       where: { workspaceId: workspace.id, deactivatedAt: IsNull() },
     });
 
     if (activeBinding) {
-      throw new ConflictException(
-        'An active Instagram account is already connected',
-      );
+      throw new ConflictException('Your plan includes one Instagram account.');
     }
 
     return this.createHostedAuthAttempt({
@@ -117,6 +125,8 @@ export class UnipileHostedAuthService {
     userWorkspaceId: string;
   }): Promise<{ attemptId: string; url: string }> {
     this.availabilityService.assertEnabled();
+
+    await this.myahUsageService.assertCanAct(workspace.id);
 
     const bindings = await this.bindingRepository.find({
       where: {
@@ -314,7 +324,22 @@ export class UnipileHostedAuthService {
       throw error;
     }
 
+    await this.enqueueLapseCleanup(attemptId);
     return { attemptId, status: UnipileHostedAuthAttemptStatus.COMPLETED };
+  }
+
+  private async enqueueLapseCleanup(attemptId: string) {
+    if (!this.twentyConfigService.get('MYAH_SUBSCRIPTION_REQUIRED')) return;
+    const attempt = await this.attemptRepository.findOneByOrFail({
+      id: attemptId,
+    });
+    // Authorization can finish after access lapses. Queue only after the binding
+    // commits; the job rechecks current access and does nothing when still paid.
+    await this.queue.add(
+      UnipileInstagramSubscriptionLapseJob.name,
+      { workspaceId: attempt.workspaceId },
+      { retryLimit: 5 },
+    );
   }
 
   private rejectNotification(
@@ -371,6 +396,7 @@ export class UnipileHostedAuthService {
       throw error;
     }
 
+    await this.enqueueLapseCleanup(attemptId);
     return { attemptId, status: UnipileHostedAuthAttemptStatus.COMPLETED };
   }
 

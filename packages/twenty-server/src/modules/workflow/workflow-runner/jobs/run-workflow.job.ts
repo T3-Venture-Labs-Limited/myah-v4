@@ -1,4 +1,5 @@
 import { Logger, Scope } from '@nestjs/common';
+import { MyahUsageService } from 'src/engine/core-modules/myah-subscription/myah-usage.service';
 
 import { isDefined } from 'twenty-shared/utils';
 
@@ -35,6 +36,7 @@ export class RunWorkflowJob {
     private readonly metricsService: MetricsService,
     private readonly globalWorkspaceOrmManager: GlobalWorkspaceOrmManager,
     private readonly workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
+    private readonly myahUsage: MyahUsageService,
   ) {}
 
   @Process(RUN_WORKFLOW_JOB_NAME)
@@ -51,6 +53,7 @@ export class RunWorkflowJob {
       { workflowRunId, workspaceId },
     );
 
+    await this.myahUsage.assertCanAct(workspaceId);
     const authContext = buildSystemAuthContext(workspaceId);
 
     await this.globalWorkspaceOrmManager.executeInWorkspaceContext(async () => {

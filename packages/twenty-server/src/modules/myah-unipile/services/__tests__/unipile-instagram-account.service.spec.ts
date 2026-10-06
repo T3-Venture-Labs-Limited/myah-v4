@@ -163,7 +163,11 @@ const createCoreManager = (
   },
 ): CoreManager => ({
   getRepository: jest.fn((target: { name?: string }) =>
-    target.name === 'WorkspaceEntity' ? workspaceRepository : bindingRepository,
+    target.name === 'MyahWorkspaceSubscriptionEntity'
+      ? { update: jest.fn() }
+      : target.name === 'WorkspaceEntity'
+        ? workspaceRepository
+        : bindingRepository,
   ),
 });
 

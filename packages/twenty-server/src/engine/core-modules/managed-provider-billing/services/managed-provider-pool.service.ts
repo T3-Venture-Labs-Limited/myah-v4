@@ -60,6 +60,19 @@ export class ManagedProviderPoolService {
     );
   }
 
+  async assertOpenRouterReservationAllowed(): Promise<void> {
+    await this.poolRepository.manager.transaction(async (manager) => {
+      await this.assertReservationAllowed(
+        manager.getRepository(ManagedProviderPoolEntity),
+        {
+          providerKey: 'openrouter',
+          tariffVersion: MANAGED_OPENROUTER_TARIFF_VERSION,
+          configurationDigest: MANAGED_OPENROUTER_TARIFF_MANIFEST_DIGEST,
+        },
+      );
+    });
+  }
+
   async assertReservationAllowed(
     repository: Repository<ManagedProviderPoolEntity>,
     desired: {

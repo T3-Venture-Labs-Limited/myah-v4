@@ -1,4 +1,6 @@
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
+import { isMyahSubscriptionRequiredState } from '@/client-config/states/isMyahSubscriptionRequiredState';
+import { MyahSettingsBilling } from '~/pages/settings/billing/MyahSettingsBilling';
 import { SettingsPageContainer } from '@/settings/components/SettingsPageContainer';
 import { SettingsPageLayout } from '@/settings/components/layout/SettingsPageLayout';
 import {
@@ -231,9 +233,22 @@ const newIdempotencyKey = (): string =>
   globalThis.crypto?.randomUUID?.() ??
   `billing-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-export const SettingsBilling = ({
+export const SettingsBilling = ({ viewModel }: SettingsBillingProps) => {
+  const isMyahSubscriptionRequired = useAtomStateValue(
+    isMyahSubscriptionRequiredState,
+  );
+  return isMyahSubscriptionRequired ? (
+    <MyahSettingsBilling />
+  ) : (
+    <LegacySettingsBilling viewModel={viewModel} />
+  );
+};
+
+type LegacySettingsBillingProps = SettingsBillingProps;
+
+const LegacySettingsBilling = ({
   viewModel: suppliedViewModel,
-}: SettingsBillingProps) => {
+}: LegacySettingsBillingProps) => {
   const { t } = useLingui();
   const navigateSettings = useNavigateSettings();
   const { enqueueErrorSnackBar } = useSnackBar();

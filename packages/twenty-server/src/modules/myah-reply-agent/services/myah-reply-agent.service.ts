@@ -1,4 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import {
+  AiException,
+  AiExceptionCode,
+} from 'src/engine/metadata-modules/ai/ai.exception';
 import { InjectDataSource } from '@nestjs/typeorm';
 
 import { createHash, randomUUID } from 'node:crypto';
@@ -844,6 +848,12 @@ export class MyahReplyAgentService {
 // What a person sees when the agent could not draft (MYAH-445): the run
 // becomes "Needs you" with this reason until someone replies or regenerates.
 export const describeMyahReplyAgentFailure = (error: unknown): string => {
+  if (error instanceof AiException) {
+    if (error.code === AiExceptionCode.INCLUDED_USAGE_EXHAUSTED)
+      return `${error.message} Regenerate after it resets, or reply yourself.`;
+    if (error.code === AiExceptionCode.SUBSCRIPTION_REQUIRED)
+      return 'The workspace subscription has ended. Ask an admin to resubscribe, then Regenerate, or reply yourself.';
+  }
   const message = error instanceof Error ? error.message : '';
   if (/prepaid balance|credits exhausted/i.test(message))
     return 'AI credit is used up. Add credit, then Regenerate, or reply yourself.';

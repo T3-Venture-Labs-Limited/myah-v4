@@ -2,6 +2,7 @@ export enum CacheStorageNamespace {
   ModuleMessaging = 'module:messaging',
   ModuleCalendar = 'module:calendar',
   ModuleWorkflow = 'module:workflow',
+  ModuleMyahSubscription = 'module:myah-subscription',
   EngineWorkspace = 'engine:workspace',
   EngineCoreEntity = 'engine:core-entity',
   EngineLock = 'engine:lock',

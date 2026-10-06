@@ -1,4 +1,7 @@
 import { useCallback } from 'react';
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
+import { useMyahWorkspaceUsage } from '@/settings/billing/hooks/useMyahWorkspaceUsage';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
 import { v4 } from 'uuid';
 import { useMutation } from '@apollo/client/react';
 import {
@@ -26,6 +29,8 @@ export const setSessionId = (domain?: string): void => {
 };
 
 export const useEventTracker = () => {
+  const currentWorkspace = useAtomStateValue(currentWorkspaceState);
+  const { hasAccess } = useMyahWorkspaceUsage();
   const [createEventMutation] = useMutation(TrackAnalyticsDocument);
 
   return useCallback(
@@ -33,6 +38,7 @@ export const useEventTracker = () => {
       type: AnalyticsType,
       payload: Omit<MutationTrackAnalyticsArgs, 'type'>,
     ) => {
+      if (currentWorkspace && !hasAccess) return;
       createEventMutation({
         variables: {
           type,
@@ -46,6 +52,6 @@ export const useEventTracker = () => {
         },
       });
     },
-    [createEventMutation],
+    [createEventMutation, currentWorkspace, hasAccess],
   );
 };

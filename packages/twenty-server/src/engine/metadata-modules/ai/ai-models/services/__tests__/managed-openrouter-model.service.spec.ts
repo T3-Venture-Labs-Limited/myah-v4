@@ -79,6 +79,7 @@ const createProviderModel = () => {
 
 const createService = ({
   customOpenRouter = false,
+  metronomeEnabled = true,
   enabled = true,
   eligible = true,
   eligibleWorkspaceIds = eligible ? ['workspace-id'] : [],
@@ -86,6 +87,7 @@ const createService = ({
   operationState = ManagedProviderOperationState.RESERVED,
 }: {
   customOpenRouter?: boolean;
+  metronomeEnabled?: boolean;
   enabled?: boolean;
   eligible?: boolean;
   eligibleWorkspaceIds?: string[];
@@ -110,6 +112,7 @@ const createService = ({
       const values: Record<string, unknown> = {
         AI_PROVIDERS: customOpenRouter ? { openrouter: {} } : {},
         MANAGED_OPENROUTER_ENABLED: enabled,
+        MANAGED_OPENROUTER_METRONOME_BILLING_ENABLED: metronomeEnabled,
         MANAGED_OPENROUTER_CHARGE_PRODUCT_ID:
           '33333333-3333-4333-8333-333333333333',
         MANAGED_OPENROUTER_CASH_PAID_MICROUSD: '105500000',
@@ -125,13 +128,26 @@ const createService = ({
     }),
   };
 
+  const myahAiUsageService = {
+    begin: jest.fn().mockResolvedValue({
+      workspaceId: 'workspace-id',
+      sourceKey: 'ai:request',
+      modelId: modelConfig.modelId,
+      usagePeriodStart: null,
+      estimatedCostMicrousd: '100',
+    }),
+    complete: jest.fn(),
+    recover: jest.fn(),
+  };
   return {
     operationService,
     metricsService,
+    myahAiUsageService,
     service: new ManagedOpenRouterModelService(
       operationService as unknown as ManagedProviderOperationService,
       config as unknown as TwentyConfigService,
       metricsService as never,
+      myahAiUsageService as never,
     ),
   };
 };
@@ -169,6 +185,135 @@ const wrap = ({
 
   return wrappedModel as LanguageModelV3;
 };
+
+describe('ManagedOpenRouterModelService included usage', () => {
+  it('gates generation and records provider cost without Metronome', async () => {
+    const { service, operationService, myahAiUsageService } = createService({
+      metronomeEnabled: false,
+    });
+    const { model, doGenerate } = createProviderModel();
+    await wrap({ model, service }).doGenerate({
+      prompt: [],
+      maxOutputTokens: 12,
+    } as never);
+    expect(myahAiUsageService.begin).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: 'chat:chat-turn-1:0',
+        workspaceId: 'workspace-id',
+        estimatedCostMicrousd: expect.any(Number),
+      }),
+    );
+    expect(doGenerate.mock.calls[0][0].maxOutputTokens).toBe(12);
+    expect(myahAiUsageService.complete).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceKey: 'ai:request' }),
+      '3',
+      'generation-1',
+    );
+    expect(operationService.reserveOperation).not.toHaveBeenCalled();
+    expect(operationService.completeOperation).not.toHaveBeenCalled();
+    expect(operationService.attachProviderExecutionId).not.toHaveBeenCalled();
+  });
+
+  it.each(['SUBSCRIPTION_REQUIRED', 'INCLUDED_USAGE_EXHAUSTED'])(
+    'preserves %s without calling the provider',
+    async (code) => {
+      const { service, myahAiUsageService } = createService({
+        metronomeEnabled: false,
+      });
+      const { model, doGenerate } = createProviderModel();
+      myahAiUsageService.begin.mockRejectedValue({ code });
+      await expect(
+        wrap({ model, service }).doGenerate({ prompt: [] } as never),
+      ).rejects.toMatchObject({ code });
+      expect(doGenerate).not.toHaveBeenCalled();
+    },
+  );
+
+  it('records a completed stream without Metronome', async () => {
+    const { service, operationService, myahAiUsageService } = createService({
+      metronomeEnabled: false,
+    });
+    const { model, doStream } = createProviderModel();
+    doStream.mockResolvedValue({
+      response: { id: 'generation-1' },
+      stream: new ReadableStream({
+        start(controller) {
+          controller.enqueue({ type: 'finish', usage });
+          controller.close();
+        },
+      }),
+    });
+    const { stream } = await wrap({ model, service }).doStream({
+      prompt: [],
+    } as never);
+    const reader = stream.getReader();
+    while (!(await reader.read()).done) {
+      /* consume */
+    }
+    expect(myahAiUsageService.complete).toHaveBeenCalledWith(
+      expect.any(Object),
+      '3',
+      'generation-1',
+    );
+    expect(myahAiUsageService.recover).not.toHaveBeenCalled();
+    expect(operationService.completeOperation).not.toHaveBeenCalled();
+  });
+
+  it.each(['generation-1', undefined])(
+    'queues recovery for a cancelled stream (id: %s)',
+    async (id) => {
+      const { service, myahAiUsageService } = createService({
+        metronomeEnabled: false,
+      });
+      const { model, doStream } = createProviderModel();
+      doStream.mockResolvedValue({
+        response: { id },
+        stream: new ReadableStream(),
+      });
+      const { stream } = await wrap({ model, service }).doStream({
+        prompt: [],
+      } as never);
+      await stream.cancel();
+      expect(myahAiUsageService.recover).toHaveBeenCalledWith(
+        expect.any(Object),
+        id ?? null,
+      );
+      expect(myahAiUsageService.complete).not.toHaveBeenCalled();
+    },
+  );
+
+  it('records nothing for an explicitly rejected provider request', async () => {
+    const { service, myahAiUsageService } = createService({
+      metronomeEnabled: false,
+    });
+    const { model, doGenerate } = createProviderModel();
+    doGenerate.mockRejectedValue({ statusCode: 401 });
+    await expect(
+      wrap({ model, service }).doGenerate({ prompt: [] } as never),
+    ).rejects.toThrow('Managed OpenRouter generation failed');
+    expect(myahAiUsageService.complete).not.toHaveBeenCalled();
+    expect(myahAiUsageService.recover).not.toHaveBeenCalled();
+  });
+
+  it('retains the context-window rejection', async () => {
+    const { service, myahAiUsageService } = createService({
+      metronomeEnabled: false,
+    });
+    const { model, doGenerate } = createProviderModel();
+    await expect(
+      wrap({ model, service }).doGenerate({
+        prompt: [
+          {
+            role: 'user',
+            content: [{ type: 'text', text: 'x'.repeat(1_048_577) }],
+          },
+        ],
+      } as never),
+    ).rejects.toThrow('context window');
+    expect(doGenerate).not.toHaveBeenCalled();
+    expect(myahAiUsageService.begin).not.toHaveBeenCalled();
+  });
+});
 
 describe('ManagedOpenRouterModelService', () => {
   it('returns non-OpenRouter models unchanged', () => {

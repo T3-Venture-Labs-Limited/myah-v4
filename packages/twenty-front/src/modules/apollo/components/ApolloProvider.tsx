@@ -3,6 +3,7 @@ import { ApolloProvider as ApolloProviderBase } from '@apollo/client/react';
 import { useApolloFactory } from '@/apollo/hooks/useApolloFactory';
 import { createCaptchaRefreshLink } from '@/apollo/utils/captchaRefreshLink';
 import { useRequestFreshCaptchaToken } from '@/captcha/hooks/useRequestFreshCaptchaToken';
+import { MyahSubscriptionRefreshEffect } from '@/settings/billing/components/MyahSubscriptionRefreshEffect';
 import { REACT_APP_SERVER_BASE_URL } from '~/config';
 
 export const ApolloProvider = ({ children }: React.PropsWithChildren) => {
@@ -22,6 +23,9 @@ export const ApolloProvider = ({ children }: React.PropsWithChildren) => {
   }
 
   return (
-    <ApolloProviderBase client={apolloClient}>{children}</ApolloProviderBase>
+    <ApolloProviderBase client={apolloClient}>
+      <MyahSubscriptionRefreshEffect />
+      {children}
+    </ApolloProviderBase>
   );
 };

@@ -753,6 +753,7 @@ describe('InstagramActionBudgetService (PostgreSQL)', () => {
           instagramAccountRecordId,
         }),
       } as never,
+      { assertCanAct: jest.fn() } as never,
     );
     const sendInput = (approvalBindingId: string) => ({
       workspaceId,

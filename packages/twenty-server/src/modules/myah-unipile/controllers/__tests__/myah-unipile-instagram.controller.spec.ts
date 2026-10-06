@@ -17,6 +17,7 @@ import { PermissionFlagType } from 'twenty-shared/constants';
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
 
 import { settings } from 'src/engine/constants/settings';
+import { MyahSubscriptionApiGuard } from 'src/engine/core-modules/myah-subscription/myah-subscription-api-access.service';
 import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
 import { JwtAuthGuard } from 'src/engine/guards/jwt-auth.guard';
 import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
@@ -274,7 +275,7 @@ describe('MyahUnipileInstagramController', () => {
     const permissionsService: PermissionsService = {
       userHasWorkspaceSettingPermission: jest.fn().mockResolvedValue(true),
     };
-    const SettingsPermissionGuard = guards[2] as new (
+    const SettingsPermissionGuard = guards[3] as new (
       permissionsService: PermissionsService,
     ) => {
       canActivate(context: ExecutionContext): Promise<boolean>;
@@ -292,8 +293,12 @@ describe('MyahUnipileInstagramController', () => {
       }),
     } as unknown as ExecutionContext;
 
-    expect(guards).toHaveLength(3);
-    expect(guards.slice(0, 2)).toEqual([JwtAuthGuard, WorkspaceAuthGuard]);
+    expect(guards).toHaveLength(4);
+    expect(guards.slice(0, 3)).toEqual([
+      JwtAuthGuard,
+      WorkspaceAuthGuard,
+      MyahSubscriptionApiGuard,
+    ]);
     expect(
       Reflect.getMetadata(
         EXCEPTION_FILTERS_METADATA,

@@ -469,6 +469,7 @@ const createHarness = (overrides?: {
     history,
     dueTime,
     identity,
+    { assertCanAct: jest.fn() } as never,
   );
 
   return {

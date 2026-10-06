@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { MyahSubscriptionModule } from 'src/engine/core-modules/myah-subscription/myah-subscription.module';
 
 import { FileEmailAttachmentModule } from 'src/engine/core-modules/file/file-email-attachment/file-email-attachment.module';
 import { MyahComposeEmailModule } from 'src/engine/core-modules/myah-inbox/myah-compose-email.module';
@@ -10,6 +11,7 @@ import { MessagingSendManagerModule } from 'src/modules/messaging/message-outbou
 
 @Module({
   imports: [
+    MyahSubscriptionModule,
     FileEmailAttachmentModule,
     MyahComposeEmailModule,
     ToolModule,

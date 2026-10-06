@@ -474,6 +474,64 @@ export class ConfigVariables {
 
   @ConfigVariablesMetadata({
     group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description:
+      'Use Metronome prepaid billing instead of Myah included usage for managed OpenRouter calls',
+    type: ConfigVariableType.BOOLEAN,
+  })
+  @IsOptional()
+  MANAGED_OPENROUTER_METRONOME_BILLING_ENABLED = true;
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Require a Myah workspace subscription',
+    type: ConfigVariableType.BOOLEAN,
+  })
+  @IsOptional()
+  MYAH_SUBSCRIPTION_REQUIRED = false;
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Workspace IDs with complimentary Myah access',
+    type: ConfigVariableType.ARRAY,
+  })
+  @IsOptional()
+  MYAH_COMPLIMENTARY_WORKSPACE_IDS: string[] = [];
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Included AI usage per paid period in micro-USD',
+    type: ConfigVariableType.NUMBER,
+  })
+  @Min(1)
+  MYAH_INCLUDED_USAGE_MICROUSD = 30_000_000;
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Myah monthly Stripe price ID',
+    type: ConfigVariableType.STRING,
+  })
+  @IsString()
+  MYAH_STRIPE_PRICE_ID = '';
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Myah early-access Stripe coupon ID',
+    type: ConfigVariableType.STRING,
+  })
+  @IsString()
+  MYAH_STRIPE_EARLY_ACCESS_COUPON_ID = '';
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
+    description: 'Myah Stripe webhook signing secret',
+    type: ConfigVariableType.STRING,
+    isSensitive: true,
+  })
+  @IsString()
+  MYAH_STRIPE_WEBHOOK_SECRET = '';
+
+  @ConfigVariablesMetadata({
+    group: ConfigVariablesGroup.MANAGED_PROVIDER_BILLING_CONFIG,
     description: 'Server-only OpenRouter API key for Myah-managed AI',
     isSensitive: true,
     isEnvOnly: true,
@@ -494,7 +552,11 @@ export class ConfigVariables {
     isHiddenInAdminPanel: true,
     type: ConfigVariableType.STRING,
   })
-  @ValidateIf((env) => env.MANAGED_OPENROUTER_ENABLED === true)
+  @ValidateIf(
+    (env) =>
+      env.MANAGED_OPENROUTER_ENABLED === true &&
+      env.MANAGED_OPENROUTER_METRONOME_BILLING_ENABLED !== false,
+  )
   @IsUUID()
   MANAGED_OPENROUTER_CHARGE_PRODUCT_ID = '';
 
@@ -506,7 +568,11 @@ export class ConfigVariables {
     isHiddenInAdminPanel: true,
     type: ConfigVariableType.STRING,
   })
-  @ValidateIf((env) => env.MANAGED_OPENROUTER_ENABLED === true)
+  @ValidateIf(
+    (env) =>
+      env.MANAGED_OPENROUTER_ENABLED === true &&
+      env.MANAGED_OPENROUTER_METRONOME_BILLING_ENABLED !== false,
+  )
   @IsUUID()
   MANAGED_OPENROUTER_CREDIT_PRODUCT_ID = '';
 

@@ -1,4 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
+import {
+  MyahWorkspaceAccess,
+  MyahWorkspaceAccessService,
+} from 'src/engine/core-modules/myah-subscription/myah-workspace-access.service';
 import { InjectRepository } from '@nestjs/typeorm';
 
 import { isNonEmptyString } from '@sniptt/guards';
@@ -51,6 +55,7 @@ export class OnboardingService {
     private readonly workspaceRepository: Repository<WorkspaceEntity>,
     @InjectMessageQueue(MessageQueue.workspaceQueue)
     private readonly messageQueueService: MessageQueueService,
+    private readonly myahWorkspaceAccess: MyahWorkspaceAccessService,
   ) {}
 
   private isWorkspaceActivationPending(workspace: WorkspaceEntity) {
@@ -82,6 +87,14 @@ export class OnboardingService {
 
     if (this.isWorkspaceActivationPending(workspace)) {
       return OnboardingStatus.WORKSPACE_ACTIVATION;
+    }
+
+    const access = await this.myahWorkspaceAccess.getAccess(workspace.id);
+    if (
+      access === MyahWorkspaceAccess.NEEDS_SUBSCRIPTION ||
+      access === MyahWorkspaceAccess.LAPSED
+    ) {
+      return OnboardingStatus.PLAN_REQUIRED;
     }
 
     const userVars = await this.userVarsService.getAll({

@@ -1,4 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
+import {
+  MyahAiUsageService,
+  type MyahAiUsageReservation,
+} from 'src/engine/core-modules/myah-subscription/myah-ai-usage.service';
 import { createHash } from 'node:crypto';
 
 import {
@@ -46,6 +50,7 @@ type ManagedOpenRouterModelContext = {
 };
 
 type ReservedGeneration = {
+  includedUsage?: MyahAiUsageReservation;
   actorUserWorkspaceId: string | null;
   modelId: string;
   operationId: string;
@@ -79,6 +84,7 @@ export class ManagedOpenRouterModelService {
     private readonly operationService: ManagedProviderOperationService,
     private readonly twentyConfigService: TwentyConfigService,
     private readonly metricsService: MetricsService,
+    private readonly myahAiUsageService: MyahAiUsageService,
   ) {}
 
   isManagedModel({
@@ -532,48 +538,68 @@ export class ManagedOpenRouterModelService {
         modelConfig.modelId,
         tariffVersion,
       );
-      const operation = await this.operationService.reserveOperation(
-        {
-          actorUserWorkspaceId,
-          expectedProductIds: [chargeProductId],
-          maximumUsageProperties: {
-            inputUnits: estimatedMaximumInputUnits,
-            model: modelConfig.modelId,
-            outputUnits: maximumOutputUnits,
-            tariffVersion,
-            cashPaidMicrousd,
-            usableCreditsReceivedMicrousd,
-            multiplierEvidenceVersion,
-            inputRate: maximumInputRate,
-            outputRate: maximumOutputRate,
-            cachedInputRate: maximumCachedInputRate,
-            cacheCreationRate: maximumCacheCreationRate,
-            baseInputRate,
-            baseOutputRate,
-            baseCachedInputRate,
-            baseCacheCreationRate,
-            ...(manifestModel.longContext && {
-              longContextCachedInputRate,
-              longContextCacheCreationRate,
-              longContextInputRate,
-              longContextOutputRate,
-              longContextThreshold,
-            }),
-            chargeCentUnits: maximumChargeCentUnits,
-            charge_cent_unit: maximumChargeCentUnits.toString(),
-            model_id: modelConfig.modelId,
-            tariff_version: tariffVersion,
-          },
-          requestId: `${executionSurface}:${requestIdRoot}:${invocationOrdinal}`,
-          metronomeEventType: MANAGED_OPENROUTER_EVENT_TYPE,
-          operationKey: MANAGED_OPENROUTER_OPERATION_KEY,
-          providerConfigurationKey: modelConfig.modelId,
-          providerKey: MANAGED_OPENROUTER_PROVIDER_NAME,
-          workspaceId,
-        },
-        { rejectReplay: true },
-      );
+      const requestId = `${executionSurface}:${requestIdRoot}:${invocationOrdinal}`;
+      const includedUsage =
+        this.twentyConfigService.get(
+          'MANAGED_OPENROUTER_METRONOME_BILLING_ENABLED',
+        ) === false
+          ? await this.myahAiUsageService.begin({
+              workspaceId,
+              requestId,
+              modelId: modelConfig.modelId,
+              estimatedCostMicrousd: Math.ceil(
+                estimatedMaximumInputUnits * maximumPromptRate +
+                  maximumOutputUnits * maximumOutputRate,
+              ),
+            })
+          : undefined;
+      // No managedProviderOperation is created in included-usage mode, so the
+      // Metronome settlement/recovery workers cannot bill this generation.
+      const operation = includedUsage
+        ? { id: includedUsage.sourceKey, reservedAmountCents: '0' }
+        : await this.operationService.reserveOperation(
+            {
+              actorUserWorkspaceId,
+              expectedProductIds: [chargeProductId],
+              maximumUsageProperties: {
+                inputUnits: estimatedMaximumInputUnits,
+                model: modelConfig.modelId,
+                outputUnits: maximumOutputUnits,
+                tariffVersion,
+                cashPaidMicrousd,
+                usableCreditsReceivedMicrousd,
+                multiplierEvidenceVersion,
+                inputRate: maximumInputRate,
+                outputRate: maximumOutputRate,
+                cachedInputRate: maximumCachedInputRate,
+                cacheCreationRate: maximumCacheCreationRate,
+                baseInputRate,
+                baseOutputRate,
+                baseCachedInputRate,
+                baseCacheCreationRate,
+                ...(manifestModel.longContext && {
+                  longContextCachedInputRate,
+                  longContextCacheCreationRate,
+                  longContextInputRate,
+                  longContextOutputRate,
+                  longContextThreshold,
+                }),
+                chargeCentUnits: maximumChargeCentUnits,
+                charge_cent_unit: maximumChargeCentUnits.toString(),
+                model_id: modelConfig.modelId,
+                tariff_version: tariffVersion,
+              },
+              requestId: `${executionSurface}:${requestIdRoot}:${invocationOrdinal}`,
+              metronomeEventType: MANAGED_OPENROUTER_EVENT_TYPE,
+              operationKey: MANAGED_OPENROUTER_OPERATION_KEY,
+              providerConfigurationKey: modelConfig.modelId,
+              providerKey: MANAGED_OPENROUTER_PROVIDER_NAME,
+              workspaceId,
+            },
+            { rejectReplay: true },
+          );
       const reservation = {
+        includedUsage,
         actorUserWorkspaceId,
         modelId: modelConfig.modelId,
         operationId: operation.id,
@@ -648,6 +674,16 @@ export class ManagedOpenRouterModelService {
       raw?: Record<string, unknown>;
     };
   }): Promise<void> {
+    if (reservation.includedUsage) {
+      if (providerCostMicrousd === null)
+        throw new Error('Missing OpenRouter usage cost');
+      await this.myahAiUsageService.complete(
+        reservation.includedUsage,
+        providerCostMicrousd,
+        providerExecutionId,
+      );
+      return;
+    }
     const inputUnits = usage.inputTokens.total;
     const outputUnits = usage.outputTokens.total;
     const rawDetails = (authoritativeRawUsage?.prompt_tokens_details ??
@@ -831,6 +867,13 @@ export class ManagedOpenRouterModelService {
     reservation: ReservedGeneration,
     providerExecutionId: string | null = null,
   ): Promise<void> {
+    if (reservation.includedUsage) {
+      await this.myahAiUsageService.recover(
+        reservation.includedUsage,
+        providerExecutionId,
+      );
+      return;
+    }
     await this.operationService.completeOperation({
       actualUsageProperties: {
         inputUnits: 0,
@@ -869,6 +912,7 @@ export class ManagedOpenRouterModelService {
   private async completeNonBillableSafely(
     reservation: ReservedGeneration,
   ): Promise<void> {
+    if (reservation.includedUsage) return;
     try {
       await this.operationService.completeOperation({
         actualUsageProperties: {
@@ -1044,6 +1088,7 @@ export class ManagedOpenRouterModelService {
     reservation: ReservedGeneration,
     providerExecutionId: string,
   ): Promise<void> {
+    if (reservation.includedUsage) return;
     await this.operationService.attachProviderExecutionId({
       operationId: reservation.operationId,
       providerConfigurationKey: reservation.modelId,

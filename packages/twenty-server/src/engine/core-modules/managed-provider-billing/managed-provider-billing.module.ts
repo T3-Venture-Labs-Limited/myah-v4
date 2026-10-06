@@ -71,6 +71,7 @@ import { ManagedProviderStripeService } from './stripe/managed-provider-stripe.s
     MetronomeWorkspaceCustomerService,
   ],
   exports: [
+    OpenRouterGenerationLookupService,
     ManagedProviderOperationService,
     ManagedProviderPoolService,
     ManagedProviderUsageDeliveryService,

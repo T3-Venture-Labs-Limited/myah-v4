@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { MyahSubscriptionModule } from 'src/engine/core-modules/myah-subscription/myah-subscription.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { EmailingDomainEntity } from 'src/engine/core-modules/emailing-domain/emailing-domain.entity';
@@ -32,6 +33,7 @@ const gmailMessageOutboundProvider = isE2eTestFixturesEnabled()
 
 @Module({
   imports: [
+    MyahSubscriptionModule,
     OAuth2ClientManagerModule,
     MyahInboxContactTriageModule,
     MessagingIMAPDriverModule,

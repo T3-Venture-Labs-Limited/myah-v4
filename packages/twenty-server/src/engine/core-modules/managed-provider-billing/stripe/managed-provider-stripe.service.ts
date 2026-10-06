@@ -1134,7 +1134,7 @@ export class ManagedProviderStripeService {
     return metronomeBaseUrlEnvironment === 'PRODUCTION';
   }
 
-  private async ensureWorkspaceCustomer(
+  async ensureWorkspaceCustomer(
     workspaceId: string,
     metronomeBaseUrlEnvironment: MetronomeBaseUrlEnvironment,
   ): Promise<string> {
@@ -1194,14 +1194,19 @@ export class ManagedProviderStripeService {
     return concurrent.stripeCustomerId;
   }
 
-  private async persistedCustomerId(workspaceId: string): Promise<string> {
+  async persistedCustomerId(workspaceId: string): Promise<string> {
+    const customerId = await this.findPersistedCustomerId(workspaceId);
+    if (!customerId)
+      throw new Error('Workspace Stripe Customer is not configured');
+    return customerId;
+  }
+
+  async findPersistedCustomerId(workspaceId: string): Promise<string | null> {
     const installation = await this.installationRepository.findOneBy(
       workspaceId,
       {},
     );
-    if (!installation?.stripeCustomerId)
-      throw new Error('Workspace Stripe Customer is not configured');
-    return installation.stripeCustomerId;
+    return installation?.stripeCustomerId ?? null;
   }
 
   private stripe(): Stripe {

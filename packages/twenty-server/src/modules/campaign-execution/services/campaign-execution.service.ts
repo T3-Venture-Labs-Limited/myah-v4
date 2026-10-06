@@ -1,6 +1,8 @@
 import { types as nodeUtilTypes } from 'node:util';
 
 import { Inject, Injectable } from '@nestjs/common';
+import { MyahUsageService } from 'src/engine/core-modules/myah-subscription/myah-usage.service';
+
 import { IANA_TIME_ZONES } from 'twenty-shared/constants';
 import { validate as uuidValidate } from 'uuid';
 
@@ -1247,6 +1249,7 @@ export class CampaignExecutionService {
     private readonly dueTime: CampaignInitialDueTimePort,
     @Inject(CAMPAIGN_EXECUTION_IDENTITY_PORT)
     private readonly identity: CampaignExecutionIdentityPort,
+    private readonly myahUsage: MyahUsageService,
   ) {}
 
   async lookupStartReplay(
@@ -1359,6 +1362,7 @@ export class CampaignExecutionService {
 
   async startCampaign(input: StartCampaignInput): Promise<StartCampaignResult> {
     const detachedInput = snapshotStartInput(input);
+    await this.myahUsage.assertCanAct(detachedInput.workspaceId);
 
     try {
       return await this.transaction.run(

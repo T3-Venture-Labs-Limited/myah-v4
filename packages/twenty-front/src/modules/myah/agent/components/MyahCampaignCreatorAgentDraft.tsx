@@ -6,6 +6,8 @@ import { getUtf8ByteLength } from 'twenty-shared/utils';
 import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
+import { MyahReplyAgentBillingLink } from '@/myah/agent/components/MyahReplyAgentBillingLink';
+import { useMyahWorkspaceUsage } from '@/settings/billing/hooks/useMyahWorkspaceUsage';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import {
   GET_MYAH_REPLY_AGENT_REVIEW,
@@ -180,6 +182,8 @@ export const MyahCampaignCreatorAgentDraft = ({
   returnTarget: CampaignCreatorInboxReturnTarget;
 }) => {
   const currentWorkspace = useAtomStateValue(currentWorkspaceState);
+  const { isEnabled, hasAccess, usage } = useMyahWorkspaceUsage();
+  const aiUnavailable = isEnabled && (!hasAccess || usage?.exhausted === true);
   const { openMyahInboxConversation } = useOpenMyahInboxConversation();
   const review = useQuery<MyahReplyAgentReviewData>(
     GET_MYAH_REPLY_AGENT_REVIEW,
@@ -219,6 +223,9 @@ export const MyahCampaignCreatorAgentDraft = ({
       <StyledMuted>
         {node.reason ? `${node.reason} · ` : ''}
         {`Send on: ${channelLabel}`}
+        {node.nextAction === 'NEEDS_YOU' && (
+          <MyahReplyAgentBillingLink reason={node.reason} />
+        )}
       </StyledMuted>
       {node.channel === 'INSTAGRAM' ? (
         <InstagramDraft
@@ -242,8 +249,9 @@ export const MyahCampaignCreatorAgentDraft = ({
         <Button
           title={regenerating ? 'Regenerating…' : 'Regenerate'}
           variant="secondary"
-          disabled={regenerating}
+          disabled={regenerating || aiUnavailable}
           onClick={async () => {
+            if (aiUnavailable) return;
             await regenerate({
               variables: { input: { campaignCreatorId: membershipId } },
             }).catch(() => undefined);

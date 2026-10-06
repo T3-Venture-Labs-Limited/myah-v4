@@ -1,3 +1,10 @@
+import { useMyahWorkspaceUsage } from '@/settings/billing/hooks/useMyahWorkspaceUsage';
+import { useHasPermissionFlag } from '@/settings/roles/hooks/useHasPermissionFlag';
+import { SettingsPath } from 'twenty-shared/types';
+import { Button } from 'twenty-ui/input';
+import { InlineBanner } from 'twenty-ui/feedback';
+import { PermissionFlagType } from '~/generated-metadata/graphql';
+import { useNavigateSettings } from '~/hooks/useNavigateSettings';
 import { useMyahCampaignAgentSetting } from '@/myah/agent/components/MyahCampaignAgentSettings';
 import {
   StyledAgentCard,
@@ -12,6 +19,8 @@ const STATUS_LABEL: Record<string, string> = {
   NEEDS_RECONNECT: 'reconnect required',
   ERROR: 'error',
   CONNECTING: 'connecting',
+  INACTIVE: 'disconnected',
+  DELETE_UNKNOWN: 'disconnect pending',
 };
 
 export const MyahCampaignInstagramAccount = ({
@@ -27,7 +36,18 @@ export const MyahCampaignInstagramAccount = ({
   );
   const { setting, loading, saving, update } =
     useMyahCampaignAgentSetting(campaignId);
+  const { isEnabled, hasAccess, usage } = useMyahWorkspaceUsage();
+  const canManageAccounts = useHasPermissionFlag(
+    PermissionFlagType.CONNECTED_ACCOUNTS,
+  );
+  const navigateSettings = useNavigateSettings();
   const options = setting?.instagramAccountOptions ?? [];
+  const needsLapseReconnect =
+    isEnabled &&
+    hasAccess &&
+    usage?.instagramReconnectRequired === true &&
+    !loading &&
+    !options.some((account) => account.status === 'ACTIVE');
   const selected = options.find(
     (account) => account.id === setting?.instagramAccountId,
   );
@@ -37,8 +57,9 @@ export const MyahCampaignInstagramAccount = ({
       <h3>Instagram account</h3>
       {options.length === 0 && !loading ? (
         <StyledAgentHint>
-          No Instagram account is connected. Connect one in Settings to send
-          Instagram steps.
+          {needsLapseReconnect
+            ? 'Disconnected'
+            : 'No Instagram account is connected. Connect one in Settings to send Instagram steps.'}
         </StyledAgentHint>
       ) : (
         <StyledAgentField>
@@ -62,7 +83,26 @@ export const MyahCampaignInstagramAccount = ({
           </select>
         </StyledAgentField>
       )}
-      {selected && selected.status !== 'ACTIVE' ? (
+      {needsLapseReconnect && (
+        <>
+          <InlineBanner
+            color="blue"
+            message="Your Instagram connection needs to be restored after your subscription ended. Reconnect the same account to resume Instagram steps. Your conversations and Campaign selection are saved."
+          />
+          {canManageAccounts ? (
+            <Button
+              title="Reconnect Instagram"
+              variant="secondary"
+              onClick={() => navigateSettings(SettingsPath.AccountsInstagram)}
+            />
+          ) : (
+            <StyledAgentHint>
+              Ask a workspace admin to reconnect Instagram.
+            </StyledAgentHint>
+          )}
+        </>
+      )}
+      {selected && selected.status !== 'ACTIVE' && !needsLapseReconnect ? (
         <StyledAgentHint>
           @{selected.username} needs reconnecting. Instagram steps wait until it
           is reconnected.

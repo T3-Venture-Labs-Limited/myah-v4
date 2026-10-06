@@ -259,6 +259,7 @@ const buildHarness = () => {
     { project: jest.fn() } as never,
     { assertCanSend: jest.fn().mockResolvedValue(undefined) } as never,
     recordAccess,
+    { assertCanAct: jest.fn() } as never,
   );
 
   return {
@@ -829,6 +830,7 @@ describeIsolatedPostgres(
         { project: jest.fn() } as never,
         { assertCanSend: jest.fn().mockResolvedValue(undefined) } as never,
         recordAccess,
+        { assertCanAct: jest.fn() } as never,
       );
     });
 
