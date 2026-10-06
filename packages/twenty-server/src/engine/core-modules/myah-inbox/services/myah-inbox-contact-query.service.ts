@@ -26,6 +26,7 @@ import { type MyahInboxContactsInput } from 'src/engine/core-modules/myah-inbox/
 import {
   MyahInboxContactIdentityKind,
   MyahInboxContactLatestChannel,
+  MyahInboxContactTriageUnavailableReason,
   MyahInboxInstagramChannelState,
   type MyahInboxContactInstagramConversation,
   type MyahInboxContactSummary,
@@ -109,6 +110,7 @@ type ContactRaw = {
   instagramNeedsAttention: boolean;
   reactionNeedsAttention: boolean;
   triageIsAvailable: boolean;
+  triageUnavailableReason: MyahInboxContactTriageUnavailableReason | null;
   triageCapabilityAvailable?: boolean;
   triageInboxOwnerId: string | null;
   triageInboxState: MyahInboxState | null;
@@ -826,13 +828,16 @@ triage_capability AS (
     GROUP BY association."messageId"
     HAVING NOT BOOL_OR(
       channel.visibility = '${MessageChannelVisibility.SHARE_EVERYTHING}'
-      OR connected_account."userWorkspaceId" = $2
+      OR COALESCE(connected_account."userWorkspaceId" = $2, FALSE)
     )
   ) AND NOT EXISTS (
     SELECT 1
     FROM "${workspaceSchemaName}"."myahInboxTriageEmailChannelProvenance" provenance
-    WHERE NOT EXISTS (
-      SELECT 1
+    CROSS JOIN LATERAL (
+      SELECT BOOL_OR(
+        channel.visibility = '${MessageChannelVisibility.SHARE_EVERYTHING}'
+        OR COALESCE(connected_account."userWorkspaceId" = $2, FALSE)
+      ) AS visible
       FROM unnest(provenance."messageChannelIds") AS channel_id(id)
       INNER JOIN core."messageChannel" channel
         ON channel.id = channel_id.id
@@ -840,15 +845,19 @@ triage_capability AS (
       LEFT JOIN core."connectedAccount" connected_account
         ON connected_account.id = channel."connectedAccountId"
        AND connected_account."workspaceId" = $1
-      WHERE channel.visibility = '${MessageChannelVisibility.SHARE_EVERYTHING}'
-         OR connected_account."userWorkspaceId" = $2
-    )
+    ) live
+    WHERE live.visible IS FALSE
   ) AS "isAvailable"
 ),
 canonical_triage_rows AS (
   SELECT
     source.*,
     ${canonicalTriageAvailable} AS "triageIsAvailable",
+    CASE
+      WHEN NOT (${canUseContactTriage ? 'triage_capability."isAvailable"' : 'FALSE'}) THEN 'ACCESS_RESTRICTED'
+      WHEN migration.status IS DISTINCT FROM 'READY' OR triage.revision IS NULL THEN 'NOT_INITIALIZED'
+      ELSE NULL
+    END AS "triageUnavailableReason",
     CASE WHEN ${canonicalTriageScope} THEN triage_owner.id ELSE source."inboxOwnerId" END AS "effectiveInboxOwnerId",
     CASE
       WHEN ${canonicalTriageScope}
@@ -979,6 +988,7 @@ contact AS (
     latest.preview,
     latest.sender,
     latest."triageIsAvailable",
+    latest."triageUnavailableReason",
     latest."triageInboxOwnerId",
     latest."triageInboxState",
     latest."triageSnoozedUntil",
@@ -1124,6 +1134,7 @@ ORDER BY paged_contacts."lastActivityAt" DESC NULLS LAST, paged_contacts."orderi
           : emailNeedsAttention || instagramNeedsAttention),
       triage: {
         isAvailable: Boolean(row.triageIsAvailable),
+        unavailableReason: row.triageUnavailableReason,
         inboxOwnerId: row.triageInboxOwnerId ?? null,
         inboxState: row.triageInboxState ?? null,
         snoozedUntil: row.triageSnoozedUntil

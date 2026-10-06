@@ -23,6 +23,7 @@ export type MyahInboxContactInstagramConversation = {
 
 export type MyahInboxContactTriage = {
   isAvailable: boolean;
+  unavailableReason: 'ACCESS_RESTRICTED' | 'NOT_INITIALIZED' | null;
   inboxOwnerId: string | null;
   inboxState:
     | 'NEEDS_REPLY'
