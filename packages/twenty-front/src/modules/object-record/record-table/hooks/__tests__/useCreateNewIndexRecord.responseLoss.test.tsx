@@ -1095,6 +1095,21 @@ it('native hook recovers the generated Campaign after persisted response loss an
   );
 });
 
+it('does not ask for the name again when the Campaign was created with one (MYAH-467)', async () => {
+  const { Wrapper, useFixture } = fixture();
+  const { result } = renderHook(useFixture, { wrapper: Wrapper });
+  await act(async () => {
+    await result.current.index.createNewIndexRecord({
+      name: 'Summer launch',
+      position: 'first',
+    });
+  });
+  expect(mockNavigate).toHaveBeenCalledTimes(1);
+  const navigationState = mockNavigate.mock.calls[0][3].state;
+  expect(navigationState.isNewRecord).toBe(true);
+  expect(navigationState.labelIdentifierFieldName).toBeUndefined();
+});
+
 it('ordinary verified Campaign insertion is deferred and authoritative', async () => {
   let release!: () => void;
   const gate = new Promise<void>((resolve) => {

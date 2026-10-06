@@ -821,6 +821,31 @@ it('disables Start for zero eligible Creators', () => {
   ).toBeVisible();
 });
 
+it('explains why the header Start is disabled (MYAH-467)', () => {
+  audienceData = {
+    campaignOutreachAudienceReview: {
+      state: 'LOADED',
+      campaignId: 'campaign',
+      eligibleCount: 0,
+      eligibleCreators: [],
+      excludedCount: 0,
+      excludedCreators: [],
+    },
+  };
+
+  render(
+    <MyahCampaignExecutionControls campaignId="campaign" variant="header" />,
+  );
+
+  const start = screen.getByRole('button', { name: 'Start' });
+
+  expect(start).toBeDisabled();
+  expect(start.closest('[title]')).toHaveAttribute(
+    'title',
+    'No eligible Campaign Creators. Resolve audience exclusions before Start.',
+  );
+});
+
 it('rejects a stale audience response owned by another Campaign', () => {
   audienceData = {
     campaignOutreachAudienceReview: {
