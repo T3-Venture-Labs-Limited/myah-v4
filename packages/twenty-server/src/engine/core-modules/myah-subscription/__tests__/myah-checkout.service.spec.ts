@@ -217,9 +217,11 @@ describe('Myah Checkout', () => {
       }),
     );
     await service.createCheckout(workspace);
-    expect(
-      stripe.checkout.sessions.create.mock.calls.at(-1)?.[0],
-    ).not.toHaveProperty('payment_method_collection');
+    expect(stripe.checkout.sessions.create).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({
+        payment_method_collection: expect.anything(),
+      }),
+    );
   });
 
   it.each([
