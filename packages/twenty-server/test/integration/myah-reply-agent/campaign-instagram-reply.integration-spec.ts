@@ -301,6 +301,25 @@ describe('Instagram replies to Campaign steps (PostgreSQL)', () => {
   });
 
   it('links the chat by handle, stops the sequence and moves the creator to Negotiating once', async () => {
+    const actor = await getDomainService<AgentActorContextService>(
+      'AgentActorContextService',
+    ).buildUserAndAgentActorContext(
+      USER_WORKSPACE_DATA_SEED_IDS.TIM,
+      workspaceId,
+    );
+    const review = getDomainService<MyahReplyAgentReviewService>(
+      'MyahReplyAgentReviewService',
+    );
+    const progress = async () =>
+      (await review.review(ids.campaign, actor.authContext)).nodes.find(
+        (node) => node.campaignCreatorId === ids.membership,
+      )?.outreach;
+    await expect(progress()).resolves.toMatchObject({
+      state: 'CONTACTED',
+      sentSteps: 1,
+      totalSteps: 2,
+      nextEligibleAt: expect.any(String),
+    });
     const reply = await conversation({
       username: 'ava.reply',
       providerChatId: chat,
@@ -315,6 +334,12 @@ describe('Instagram replies to Campaign steps (PostgreSQL)', () => {
       enrollment: 'REPLIED',
       nextStep: 'CANCELLED:ENROLLMENT_REPLIED',
       stage: 'NEGOTIATING',
+    });
+    await expect(progress()).resolves.toMatchObject({
+      state: 'REPLIED',
+      sentSteps: 1,
+      totalSteps: 2,
+      nextEligibleAt: null,
     });
   });
 
