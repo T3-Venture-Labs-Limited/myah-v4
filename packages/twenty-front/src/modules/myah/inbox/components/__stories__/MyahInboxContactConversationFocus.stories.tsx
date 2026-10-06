@@ -32,6 +32,8 @@ const contact: MyahInboxContact = {
   sender: null,
   needsAttention: false,
   triage: {
+    // Keep the fixture compatible with both the branch and newer main type.
+    ...{ unavailableReason: null },
     isAvailable: false,
     inboxOwnerId: null,
     inboxState: null,
