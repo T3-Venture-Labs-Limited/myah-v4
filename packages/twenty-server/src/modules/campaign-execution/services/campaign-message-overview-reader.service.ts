@@ -15,6 +15,7 @@ import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/ge
 import { getWorkspaceContext } from 'src/engine/twenty-orm/storage/orm-workspace-context.storage';
 import { resolveRolePermissionConfig } from 'src/engine/twenty-orm/utils/resolve-role-permission-config.util';
 import { CampaignSequenceService } from 'src/modules/myah-outreach/services/campaign-sequence.service';
+import { renderCampaignInstagramText } from 'src/modules/campaign-execution/services/campaign-instagram-step.service';
 import { deriveCampaignMessageOverviewStatus } from 'src/modules/campaign-execution/services/campaign-message-overview-status';
 import { findCreatorInstagramHandles } from 'src/modules/campaign-execution/utils/campaign-active-participation.util';
 import {
@@ -735,9 +736,15 @@ export class CampaignMessageOverviewReaderService {
               creatorName: creatorById.get(fact.creatorId)?.name ?? null,
               recipient: canReadRenderedContent && handle ? `@${handle}` : null,
               subject: null,
-              preview: canReadRenderedContent
-                ? fact.stepText?.trim().slice(0, 240) || null
-                : null,
+              // Render like the send does, so the preview matches what the
+              // creator receives. Email is only loaded when it is readable.
+              preview:
+                canReadRenderedContent && fact.stepText
+                  ? renderCampaignInstagramText(fact.stepText, {
+                      name: creatorById.get(fact.creatorId)?.name ?? null,
+                      email: creatorById.get(fact.creatorId)?.email ?? null,
+                    }).slice(0, 240) || null
+                  : null,
               sequenceStep: fact.authoredMessageIndex + 1,
               platform: 'Instagram',
               status,

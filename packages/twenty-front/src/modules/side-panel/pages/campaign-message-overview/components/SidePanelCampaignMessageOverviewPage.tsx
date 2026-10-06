@@ -287,7 +287,9 @@ export const SidePanelCampaignMessageOverviewPage = () => {
             <li>
               {row.sentAt
                 ? `Provider accepted · ${displayTime(row.sentAt)}`
-                : `Eligible after · ${displayTime(row.eligibleAfter)}`}
+                : row.eligibleAfter
+                  ? `Eligible after · ${displayTime(row.eligibleAfter)}`
+                  : 'Not sent'}
             </li>
             {row.needsAttention ? (
               <li>{campaignMessageReasonLabel(row.reason)}</li>
