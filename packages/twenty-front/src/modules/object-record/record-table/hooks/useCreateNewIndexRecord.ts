@@ -130,6 +130,9 @@ export const useCreateNewIndexRecord = ({
           )
         : undefined;
       if (objectMetadataItem.nameSingular === 'campaign') {
+        const isNamedCampaign =
+          typeof recordInput?.name === 'string' &&
+          recordInput.name.trim() !== '';
         const identity = decodeCampaignCreationIdentity(
           getTokenPair()?.accessOrWorkspaceAgnosticToken.token,
         );
@@ -406,7 +409,7 @@ export const useCreateNewIndexRecord = ({
             openRecordInSidePanel({
               recordId,
               objectNameSingular: 'campaign',
-              isNewRecord: true,
+              isNewRecord: !isNamedCampaign,
               shouldCloseAfterCreation: saved.origin.shouldCloseAfterCreation,
             });
           } else {
@@ -420,9 +423,11 @@ export const useCreateNewIndexRecord = ({
                 state: {
                   isNewRecord: true,
                   objectRecordId: recordId,
-                  labelIdentifierFieldName:
-                    getLabelIdentifierFieldMetadataItem(objectMetadataItem)
-                      ?.name,
+                  // A name typed in the creation dialog is not asked for again.
+                  labelIdentifierFieldName: isNamedCampaign
+                    ? undefined
+                    : getLabelIdentifierFieldMetadataItem(objectMetadataItem)
+                        ?.name,
                 },
               },
             );

@@ -86,9 +86,15 @@ const StyledDelay = styled.fieldset`
   padding: ${themeCssVariables.spacing[2]} 0 0;
 
   input {
+    background-color: ${themeCssVariables.background.transparent.lighter};
+    border: 1px solid ${themeCssVariables.border.color.medium};
+    border-radius: ${themeCssVariables.border.radius.sm};
     box-sizing: border-box;
+    color: ${themeCssVariables.font.color.primary};
+    font: inherit;
     margin: 0 ${themeCssVariables.spacing[2]};
-    width: 52px;
+    padding: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[2]};
+    width: 64px;
   }
   details {
     color: ${themeCssVariables.font.color.secondary};

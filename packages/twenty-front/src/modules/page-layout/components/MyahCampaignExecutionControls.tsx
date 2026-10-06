@@ -864,17 +864,20 @@ export const MyahCampaignExecutionControls = ({
     ) : lifecycle === 'DRAFT' ||
       lifecycle === 'PAUSED' ||
       hasOutstandingStart ? (
-      <Button
-        disabled={!canStart}
-        isLoading={pending === 'START'}
-        // The header has no room for the audience review: confirm it first.
-        onClick={() =>
-          variant === 'header' ? openModal(startModalId) : void start()
-        }
-        title="Start"
-        type="button"
-        variant="primary"
-      />
+      // Hovering a disabled Start explains what is missing.
+      <span title={canStart ? undefined : (blocker ?? undefined)}>
+        <Button
+          disabled={!canStart}
+          isLoading={pending === 'START'}
+          // The header has no room for the audience review: confirm it first.
+          onClick={() =>
+            variant === 'header' ? openModal(startModalId) : void start()
+          }
+          title="Start"
+          type="button"
+          variant="primary"
+        />
+      </span>
     ) : null;
 
   const confirmation = (
