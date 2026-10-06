@@ -5,11 +5,13 @@ const createService = ({
   restrictedFields = [],
   retiredRestrictedFields = [],
   reconciliationMismatches = 0,
+  migratedReceipts = [],
 }: {
   creators: Array<Record<string, unknown>>;
   restrictedFields?: string[];
   retiredRestrictedFields?: string[];
   reconciliationMismatches?: number;
+  migratedReceipts?: Array<{ attemptKey: string; operationKey: string }>;
 }) => {
   const workspaceDataSource = {
     driver: { escape: (value: string) => `"${value}"` },
@@ -23,6 +25,7 @@ const createService = ({
         ...restrictedFields.map((name) => ({ name, retired: false })),
         ...retiredRestrictedFields.map((name) => ({ name, retired: true })),
       ])
+      .mockResolvedValueOnce(migratedReceipts)
       .mockResolvedValueOnce([{ count: String(reconciliationMismatches) }]),
   };
   const writer = {
@@ -58,6 +61,53 @@ const createService = ({
 };
 
 describe('MigrateMyahCreatorSocialProfilesService', () => {
+  it('skips creators already migrated when the upgrade replays this command after their data changed', async () => {
+    // Production (T3labs): every creator had a receipt, then the legacy fields
+    // were removed, so re-planning produced a different digest and failed.
+    const { service, workspaceDataSource, operationService, dataSource } =
+      createService({
+        creators: [
+          { id: 'creator-migrated', notes: 'edited since migration' },
+          { id: 'creator-new', notes: 'added after migration' },
+        ],
+        migratedReceipts: [
+          {
+            attemptKey: 'MYAH-409-legacy-creator-v1',
+            operationKey: 'creator-migrated',
+          },
+        ],
+      });
+
+    await expect(
+      service.migrate({
+        workspaceId: '11111111-1111-4111-8111-111111111111',
+        workspaceDataSource: workspaceDataSource as never,
+        dryRun: false,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        committedRows: 1,
+        replayedRows: 1,
+        failures: 0,
+      }),
+    );
+    expect(operationService.execute).toHaveBeenCalledTimes(1);
+    expect(operationService.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ operationKey: 'creator-new' }),
+    );
+    expect(dataSource.query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('creatorDataOperationReceipt'),
+      [
+        '11111111-1111-4111-8111-111111111111',
+        [
+          'MYAH-409-legacy-creator-v1',
+          'MYAH-409-legacy-creator-v1-released-restrictions',
+        ],
+      ],
+    );
+  });
+
   it('plans only during dry-run and reports restricted values', async () => {
     const { service, workspaceDataSource, operationService } = createService({
       creators: [

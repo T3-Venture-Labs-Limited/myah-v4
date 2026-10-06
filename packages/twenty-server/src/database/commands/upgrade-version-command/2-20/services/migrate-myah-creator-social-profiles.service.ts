@@ -117,6 +117,11 @@ export class MigrateMyahCreatorSocialProfilesService {
       return report;
     }
 
+    // A creator with a receipt was already migrated. The upgrade can replay this
+    // command after the creator was edited or the legacy fields were removed, so
+    // re-planning from current data would not match the original receipt.
+    const migrated = await this.getMigratedOperationKeys(workspaceId);
+
     for (const [attemptKey, plan] of [
       ...plans.map((plan) => [MIGRATION_ATTEMPT_KEY, plan] as const),
       ...releasedPlans.map(
@@ -127,6 +132,10 @@ export class MigrateMyahCreatorSocialProfilesService {
         plan.conflicts.length > 0 ||
         (plan.profiles.length === 0 && plan.noteMarkdown === null)
       ) {
+        continue;
+      }
+      if (migrated.has(`${attemptKey}:${plan.creatorId}`)) {
+        report.replayedRows += 1;
         continue;
       }
 
@@ -197,6 +206,25 @@ export class MigrateMyahCreatorSocialProfilesService {
     );
 
     return report;
+  }
+
+  private async getMigratedOperationKeys(
+    workspaceId: string,
+  ): Promise<Set<string>> {
+    const receipts = await this.dataSource.query<
+      { attemptKey: string; operationKey: string }[]
+    >(
+      `SELECT "attemptKey", "operationKey" FROM core."creatorDataOperationReceipt"
+       WHERE "workspaceId" = $1 AND "kind" = 'LEGACY_MIGRATION'
+         AND "attemptKey" = ANY($2::text[])`,
+      [workspaceId, [MIGRATION_ATTEMPT_KEY, RELEASED_RESTRICTIONS_ATTEMPT_KEY]],
+    );
+
+    return new Set(
+      receipts.map(
+        ({ attemptKey, operationKey }) => `${attemptKey}:${operationKey}`,
+      ),
+    );
   }
 
   private async getCreatorRows(
