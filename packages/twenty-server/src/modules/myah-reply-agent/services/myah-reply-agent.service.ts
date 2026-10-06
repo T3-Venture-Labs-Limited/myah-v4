@@ -846,7 +846,7 @@ export class MyahReplyAgentService {
 export const describeMyahReplyAgentFailure = (error: unknown): string => {
   const message = error instanceof Error ? error.message : '';
   if (/prepaid balance|credits exhausted/i.test(message))
-    return 'AI credit is used up. Add credit, then Regenerate, or reply yourself.';
+    return 'Your AI usage is used up. Review Billing, then regenerate, or reply yourself.';
   if (/no ai models are available/i.test(message))
     return 'No AI model is set up for this workspace. Reply yourself.';
   return 'The agent could not prepare a reply. Regenerate or reply yourself.';

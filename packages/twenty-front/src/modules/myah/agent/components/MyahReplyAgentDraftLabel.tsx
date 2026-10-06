@@ -3,6 +3,7 @@ import { useContext } from 'react';
 import { styled } from '@linaria/react';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
+import { MyahReplyAgentFailureReason } from '@/myah/agent/components/MyahReplyAgentFailureReason';
 import { GET_MYAH_REPLY_AGENT_DRAFT_LABEL } from '@/myah/agent/graphql/myahReplyAgentOperations';
 
 const StyledLabel = styled.div`
@@ -46,9 +47,16 @@ const AgentLabel = ({ channel, conversationRecordId }: AgentLabelProps) => {
   if (!label) return null;
   return (
     <StyledLabel role="note">
-      {label.kind === 'NEEDS_YOU'
-        ? `Needs you: ${label.reason ?? 'the agent handed this off'}`
-        : `✦ Drafted by agent${label.campaignName ? ` · ${label.campaignName}` : ''}`}
+      {label.kind === 'NEEDS_YOU' ? (
+        <>
+          Needs you:{' '}
+          <MyahReplyAgentFailureReason
+            reason={label.reason ?? 'the agent handed this off'}
+          />
+        </>
+      ) : (
+        `✦ Drafted by agent${label.campaignName ? ` · ${label.campaignName}` : ''}`
+      )}
     </StyledLabel>
   );
 };

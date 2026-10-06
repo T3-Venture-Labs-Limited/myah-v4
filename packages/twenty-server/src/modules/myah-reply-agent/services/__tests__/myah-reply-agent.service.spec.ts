@@ -505,11 +505,11 @@ describe('describeMyahReplyAgentFailure', () => {
         ),
       ),
     ).toBe(
-      'AI credit is used up. Add credit, then Regenerate, or reply yourself.',
+      'Your AI usage is used up. Review Billing, then regenerate, or reply yourself.',
     );
     expect(
       describeMyahReplyAgentFailure(new Error('Credits exhausted')),
-    ).toMatch(/^AI credit is used up/);
+    ).toMatch(/^Your AI usage is used up/);
     expect(
       describeMyahReplyAgentFailure(
         new Error(

@@ -14,16 +14,14 @@ const StyledBackground = styled.div`
 type OnboardingLayoutProps = {
   children: ReactNode;
   onBack?: () => void;
-  freeCredits?: number;
 };
 
 export const OnboardingLayout = ({
   children,
   onBack,
-  freeCredits,
 }: OnboardingLayoutProps) => (
   <StyledBackground>
-    <OnboardingHeader onBack={onBack} freeCredits={freeCredits} />
+    <OnboardingHeader onBack={onBack} />
     {children}
   </StyledBackground>
 );
