@@ -337,6 +337,56 @@ describe('CampaignMessageOverviewReaderService', () => {
     );
   });
 
+  it('previews an Instagram step as the creator will receive it, not as a template', async () => {
+    const dueAt = new Date('2026-09-21T10:00:00.000Z');
+    const query = jest
+      .fn()
+      .mockResolvedValue([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          attemptState: null,
+          authoredMessageIndex: 1,
+          campaignCreatorId,
+          campaignId,
+          connectedAccountId: null,
+          creatorId,
+          dueAt,
+          estimatedSendAt: null,
+          holdReason: null,
+          messageId,
+          occurrenceId,
+          occurrenceState: 'PENDING',
+          projectedMessageThreadId: null,
+          providerAcceptedAt: null,
+          safeOutcomeReason: null,
+          sortAt: dueAt,
+          stepChannel: 'INSTAGRAM',
+          stepText: 'Hi {{creator.name}}, loved your last post!',
+          visibilityRank: 3,
+          workflowVersionId,
+        },
+      ]);
+    const service = new CampaignMessageOverviewReaderService(
+      makeOrm() as never,
+      makeDataSource(query) as never,
+      {} as never,
+      makeSequences() as never,
+    );
+
+    const result = await service.read({
+      authContext,
+      filters: new CampaignMessageOverviewInput(),
+    });
+
+    expect(result.nodes).toEqual([
+      expect.objectContaining({
+        platform: 'Instagram',
+        preview: 'Hi Ada, loved your last post!',
+      }),
+    ]);
+  });
+
   it('does not expose an Inbox handoff for an unreadable projected thread', async () => {
     const query = jest
       .fn()
