@@ -171,14 +171,8 @@ export const MYAH_NAVIGATION_ROUTES = [
     Icon: IconSettingsAutomation,
     group: 'outreach',
     entryPath: '/myah/automations',
-    availability: 'available',
-    destination: {
-      kind: 'native-object',
-      object: {
-        kind: 'core-object',
-        nameSingular: CoreObjectNameSingular.Workflow,
-      },
-    },
+    // Hidden for now (MYAH-460).
+    availability: 'deferred',
   },
   {
     id: 'automation-runs',
@@ -186,14 +180,8 @@ export const MYAH_NAVIGATION_ROUTES = [
     Icon: IconHistory,
     group: 'outreach',
     entryPath: '/myah/automation-runs',
-    availability: 'available',
-    destination: {
-      kind: 'native-object',
-      object: {
-        kind: 'core-object',
-        nameSingular: CoreObjectNameSingular.WorkflowRun,
-      },
-    },
+    // Hidden for now (MYAH-460).
+    availability: 'deferred',
   },
   {
     id: 'automation-versions',
@@ -201,14 +189,8 @@ export const MYAH_NAVIGATION_ROUTES = [
     Icon: IconVersions,
     group: 'outreach',
     entryPath: '/myah/automation-versions',
-    availability: 'available',
-    destination: {
-      kind: 'native-object',
-      object: {
-        kind: 'core-object',
-        nameSingular: CoreObjectNameSingular.WorkflowVersion,
-      },
-    },
+    // Hidden for now (MYAH-460).
+    availability: 'deferred',
   },
   {
     id: 'tasks',

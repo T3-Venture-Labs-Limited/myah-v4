@@ -107,24 +107,17 @@ export const MyahInboxContactTriageActions = ({
     triage.snoozedUntil,
   ]);
 
-  if (!triage.isAvailable || !workspaceId) {
-    return (
-      <StyledStatus role="status">
-        Triage is unavailable with your current Inbox access.
-      </StyledStatus>
-    );
-  }
+  if (!workspaceId) return null;
 
   if (
+    !triage.isAvailable ||
     triage.inboxState === null ||
     triage.revision === null ||
     triage.identityGeneration === null
   ) {
-    return (
-      <StyledStatus role="status">
-        Triage is unavailable with your current Inbox access.
-      </StyledStatus>
-    );
+    return errorMessage ? (
+      <StyledStatus role="alert">{errorMessage}</StyledStatus>
+    ) : null;
   }
 
   const expectedRevision = triage.revision;

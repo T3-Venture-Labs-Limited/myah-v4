@@ -1,3 +1,4 @@
+import { AIChatNoMoreBillingCreditsBanner } from '@/ai/components/AIChatNoMoreBillingCreditsBanner';
 import { AiChatApiKeyNotConfiguredMessage } from '@/ai/components/AiChatApiKeyNotConfiguredMessage';
 import { AiChatErrorMessage } from '@/ai/components/AiChatErrorMessage';
 import { MyahAiUsageBanner } from '@/ai/components/MyahAiUsageBanner';
@@ -22,6 +23,15 @@ export const AiChatErrorRenderer = ({
   if (isGraphqlErrorOfType(error, AiChatErrorCode.SUBSCRIPTION_REQUIRED)) {
     return <MyahAiUsageBanner code="SUBSCRIPTION_REQUIRED" />;
   }
+  if (
+    isGraphqlErrorOfType(
+      error,
+      AiChatErrorCode.MANAGED_PROVIDER_INSUFFICIENT_PREPAID_BALANCE,
+    )
+  ) {
+    return <AIChatNoMoreBillingCreditsBanner />;
+  }
+
   if (isGraphqlErrorOfType(error, AiChatErrorCode.BILLING_CREDITS_EXHAUSTED)) {
     //Handle by AIChatNoMoreBillingCreditsBanner
     return null;

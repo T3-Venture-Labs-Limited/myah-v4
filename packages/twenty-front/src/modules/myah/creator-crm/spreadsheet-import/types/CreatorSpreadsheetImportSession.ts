@@ -53,6 +53,8 @@ export type CreatorSpreadsheetImportSession = {
   getSubmissionBlockReason: NonNullable<
     SpreadsheetImportDialogOptions['getSubmissionBlockReason']
   >;
+  // Creators that rows matched instead of creating (e.g. to add to a list).
+  getExistingCreatorIds: (rows: readonly ImportedStructuredRow[]) => string[];
   getSummary: (rows: readonly ImportedStructuredRow[]) => {
     existing: number;
     conflicts: number;

@@ -1,3 +1,4 @@
+import { useTextFieldFocusProps } from '@/ui/utilities/focus/hooks/useTextFieldFocusProps';
 import { styled } from '@linaria/react';
 import { useState } from 'react';
 import { Button } from 'twenty-ui/input';
@@ -7,12 +8,15 @@ import { type EnrichedObjectMetadataItem } from '@/object-metadata/types/Enriche
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 
 const StyledRow = styled.form`
+  /* Stay in the visible part of a wide, horizontally scrolling table. */
   align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: ${themeCssVariables.spacing[2]};
-  max-width: 100%;
+  left: 0;
   padding: ${themeCssVariables.spacing[1]} ${themeCssVariables.spacing[2]};
+  position: sticky;
+  width: max-content;
 
   select,
   input {
@@ -25,8 +29,7 @@ const StyledRow = styled.form`
   }
 
   input {
-    flex: 1 1 120px;
-    min-width: 0;
+    width: 160px;
   }
 `;
 const StyledError = styled.span`
@@ -43,6 +46,7 @@ export const MyahSocialProfileAddRow = ({
   objectMetadataItem: EnrichedObjectMetadataItem;
   onCreate: (input: Partial<ObjectRecord>) => Promise<unknown>;
 }) => {
+  const textFieldFocus = useTextFieldFocusProps();
   const platforms =
     objectMetadataItem.fields.find((field) => field.name === 'platform')
       ?.options ?? [];
@@ -59,6 +63,9 @@ export const MyahSocialProfileAddRow = ({
   return (
     <StyledRow
       aria-label="Add social profile"
+      // The record table starts drag-selection on mousedown and cancels it,
+      // which would stop these inputs from taking focus.
+      data-select-disable="true"
       onSubmit={async (event) => {
         event.preventDefault();
         if (!trimmed || !platform) return;
@@ -86,6 +93,8 @@ export const MyahSocialProfileAddRow = ({
         ))}
       </select>
       <input
+        onFocus={textFieldFocus.onFocus}
+        onBlur={textFieldFocus.onBlur}
         aria-label="Handle"
         placeholder="handle or profile URL"
         value={handle}

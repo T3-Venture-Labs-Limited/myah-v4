@@ -24,8 +24,9 @@ const StyledSection = styled.div`
 `;
 
 export const MyahNavigationDrawerSection = () => {
+  // "Soon" pages stay registered but are not shown until they ship (MYAH-469).
   const routes = useResolvedMyahNavigationRoutes().filter(
-    (route) => route.status !== 'deferred',
+    (route) => route.status !== 'deferred' && route.status !== 'soon',
   );
   const { pathname, search, hash } = useLocation();
 

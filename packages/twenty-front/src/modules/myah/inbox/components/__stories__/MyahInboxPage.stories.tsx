@@ -105,6 +105,7 @@ const dualContact: MyahInboxContact = {
   needsAttention: true,
   triage: {
     isAvailable: true,
+    unavailableReason: null,
     inboxOwnerId: null,
     inboxState: 'NEEDS_REPLY',
     snoozedUntil: null,
@@ -364,6 +365,7 @@ const MyahInboxStorySurface = ({
     historyRebased: false,
     cardPageBudget: 1,
     locationMissing: false,
+    reveal: null,
     status: 'ready',
     loading: false,
     error: undefined,

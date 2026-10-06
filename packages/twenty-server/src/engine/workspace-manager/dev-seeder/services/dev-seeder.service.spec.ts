@@ -25,6 +25,9 @@ describe('DevSeederService.seedDev', () => {
       twentyConfigService: { get: jest.fn(() => false) },
       upgradeMigrationService: {
         getLastAttemptedInstanceCommandOrThrow: jest.fn().mockResolvedValue({}),
+        getCompletedInstanceCommandNames: jest
+          .fn()
+          .mockResolvedValue(new Set()),
       },
       upgradeSequenceReaderService: {
         getInitialCursorForNewWorkspace: jest.fn().mockReturnValue({}),

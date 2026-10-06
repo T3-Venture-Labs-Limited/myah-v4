@@ -76,6 +76,8 @@ export type SpreadsheetImportDialogOptions = {
   rtl?: boolean;
   // Allow header selection
   selectHeader?: boolean;
+  // Filename for the downloadable sample, independent of the page underneath.
+  sampleFileName?: string;
   // Available field for import
   availableFieldMetadataItems: FieldMetadataItem[];
   // Refresh or validate the current local rows immediately before submission.
@@ -84,6 +86,8 @@ export type SpreadsheetImportDialogOptions = {
   getSubmissionBlockReason?: (
     rows: readonly ImportedStructuredRow[],
   ) => string | undefined;
+  // An existing record is intentionally skipped, not a validation failure.
+  isAlreadyImportedRow?: (row: ImportedStructuredRow) => boolean;
   // Optional summary of how one structured row will be split across records.
   getValidationPreview?: (
     row: ImportedStructuredRow,

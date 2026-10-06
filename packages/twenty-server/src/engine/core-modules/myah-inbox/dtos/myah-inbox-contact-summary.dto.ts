@@ -15,6 +15,11 @@ export enum MyahInboxContactLatestChannel {
   INSTAGRAM = 'INSTAGRAM',
 }
 
+export enum MyahInboxContactTriageUnavailableReason {
+  ACCESS_RESTRICTED = 'ACCESS_RESTRICTED',
+  NOT_INITIALIZED = 'NOT_INITIALIZED',
+}
+
 export enum MyahInboxInstagramChannelState {
   UNAVAILABLE = 'UNAVAILABLE',
   READY = 'READY',
@@ -26,6 +31,9 @@ registerEnumType(MyahInboxContactIdentityKind, {
 });
 registerEnumType(MyahInboxContactLatestChannel, {
   name: 'MyahInboxContactLatestChannel',
+});
+registerEnumType(MyahInboxContactTriageUnavailableReason, {
+  name: 'MyahInboxContactTriageUnavailableReason',
 });
 registerEnumType(MyahInboxInstagramChannelState, {
   name: 'MyahInboxInstagramChannelState',
@@ -98,6 +106,9 @@ export class MyahInboxContactInstagramChannelSummary {
 export class MyahInboxContactTriageSummary {
   @Field(() => Boolean)
   isAvailable: boolean;
+
+  @Field(() => MyahInboxContactTriageUnavailableReason, { nullable: true })
+  unavailableReason: MyahInboxContactTriageUnavailableReason | null;
 
   @Field(() => UUIDScalarType, { nullable: true })
   inboxOwnerId: string | null;

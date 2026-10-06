@@ -32,6 +32,117 @@ const run = (n: number, status: string, handled = false) => ({
 });
 
 describe('MyahReplyAgentReviewService', () => {
+  it('reports sent steps and eligibility, and clears the schedule after a reply', async () => {
+    const memberships = [
+      membership(1, 'CONTACTED'),
+      membership(2, 'NEGOTIATING'),
+    ];
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('SELECT DISTINCT ON (e."campaignCreatorId")'))
+        return [
+          {
+            campaignCreatorId: memberships[0].id,
+            state: 'ACTIVE',
+            occurrenceState: 'PENDING',
+            sentSteps: 1,
+            totalSteps: 2,
+            dueAt: new Date('2026-10-05T17:14:00Z'),
+            reason: null,
+          },
+          {
+            campaignCreatorId: memberships[1].id,
+            state: 'REPLIED',
+            occurrenceState: 'CANCELLED',
+            sentSteps: 1,
+            totalSteps: 2,
+            dueAt: new Date('2026-10-05T17:14:00Z'),
+            reason: null,
+          },
+        ];
+      return [];
+    });
+    const service = new MyahReplyAgentReviewService(
+      { query } as never,
+      {
+        executeInWorkspaceContext: async (callback: () => unknown) =>
+          callback(),
+        getRepository: async () => ({ find: async () => memberships }),
+      } as never,
+      { assertCampaign: jest.fn(async () => ({})) } as never,
+      {} as never,
+    );
+    const review = await service.review(campaignId, {
+      workspace: { id: workspaceId },
+    } as never);
+    expect(review.nodes.map((node) => node.outreach)).toEqual([
+      {
+        state: 'CONTACTED',
+        sentSteps: 1,
+        totalSteps: 2,
+        nextEligibleAt: '2026-10-05T17:14:00.000Z',
+        reason: null,
+      },
+      {
+        state: 'REPLIED',
+        sentSteps: 1,
+        totalSteps: 2,
+        nextEligibleAt: null,
+        reason: null,
+      },
+    ]);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('core."campaignEnrollment"'),
+      [workspaceId, campaignId, memberships.map(({ id }) => id)],
+    );
+  });
+
+  it.each([
+    ['ACTIVE', 'PENDING', 0, 'SCHEDULED'],
+    ['ACTIVE', 'HELD', 1, 'NEEDS_YOU'],
+    ['ACTIVE', 'UNKNOWN', 1, 'NEEDS_YOU'],
+    ['ACTIVE', 'CANCELLED', 1, 'PAUSED'],
+    ['FINISHED', null, 2, 'FINISHED'],
+    ['EXCLUDED', null, 0, 'EXCLUDED'],
+  ])(
+    'reports %s/%s as %s steps and %s',
+    async (state, occurrenceState, sentSteps, expected) => {
+      const member = membership(1, 'CONTACTED');
+      const query = jest.fn(async (sql: string) =>
+        sql.includes('SELECT DISTINCT ON (e."campaignCreatorId")')
+          ? [
+              {
+                campaignCreatorId: member.id,
+                state,
+                occurrenceState,
+                sentSteps,
+                totalSteps: 2,
+                dueAt: null,
+                reason: null,
+              },
+            ]
+          : [],
+      );
+      const service = new MyahReplyAgentReviewService(
+        { query } as never,
+        {
+          executeInWorkspaceContext: async (callback: () => unknown) =>
+            callback(),
+          getRepository: async () => ({ find: async () => [member] }),
+        } as never,
+        { assertCampaign: jest.fn(async () => ({})) } as never,
+        {} as never,
+      );
+      const review = await service.review(campaignId, {
+        workspace: { id: workspaceId },
+      } as never);
+      expect(review.nodes[0].outreach).toMatchObject({
+        state: expected,
+        sentSteps,
+        nextEligibleAt: null,
+      });
+    },
+  );
+
   it('maps agent outcomes and skipped reasons and counts only open reviews', async () => {
     const memberships = [
       membership(1, 'NEGOTIATING'),
@@ -52,6 +163,7 @@ describe('MyahReplyAgentReviewService', () => {
           run(4, 'SENT'),
           { ...run(8, 'FAILED'), reason: 'AI credit is used up.' },
         ];
+      if (sql.includes('SELECT DISTINCT ON (e."campaignCreatorId")')) return [];
       if (sql.includes('to_regclass')) return [{ ok: true }];
       if (sql.includes('"campaignCreator" cc'))
         return [

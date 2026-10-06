@@ -1,3 +1,5 @@
+import { useApolloClient } from '@apollo/client/react';
+import { retireSocialProfiles } from '@/myah/creator-crm/socialProfileOperations';
 import { triggerUpdateRecordOptimisticEffectByBatch } from '@/apollo/optimistic-effect/utils/triggerUpdateRecordOptimisticEffectByBatch';
 import { dispatchObjectRecordOperationBrowserEvent } from '@/browser-event/utils/dispatchObjectRecordOperationBrowserEvent';
 import { useRemoveNavigationMenuItemByTargetRecordId } from '@/navigation-menu-item/common/hooks/useRemoveNavigationMenuItemByTargetRecordId';
@@ -43,9 +45,11 @@ export const useIncrementalDeleteManyRecords = <T>({
 }: UseIncrementalDeleteManyRecordsParams<T>) => {
   const { upsertRecordsInStore } = useUpsertRecordsInStore();
 
-  const mutationPageSize = pageSize;
+  const isManagedSocialProfile = objectNameSingular === 'socialProfile';
+  const mutationPageSize = isManagedSocialProfile ? 1 : pageSize;
 
   const apolloCoreClient = useApolloCoreClient();
+  const apolloMetadataClient = useApolloClient();
 
   const { objectMetadataItem } = useObjectMetadataItem({
     objectNameSingular,
@@ -165,54 +169,60 @@ export const useIncrementalDeleteManyRecords = <T>({
         });
       }
 
-      await apolloCoreClient
-        .mutate<Record<string, ObjectRecord[]>>({
-          mutation: deleteManyRecordsMutation,
-          variables: {
-            filter: { id: { in: batchedIdsToDelete } },
-          },
-          context: {
-            fetchOptions: {
-              signal: abortSignal,
-            },
-          },
-        })
-        .catch((error: Error) => {
-          if (skipOptimisticEffect) {
-            throw error;
-          }
-
-          const recordGqlFields = {
-            deletedAt: true,
-          };
-
-          cachedRecords.forEach((cachedRecord) => {
-            updateRecordFromCache({
-              objectMetadataItems,
-              objectMetadataItem,
-              cache: apolloCoreClient.cache,
-              record: { ...cachedRecord, deletedAt: null },
-              recordGqlFields,
-              objectPermissionsByObjectMetadataId,
-            });
-          });
-
-          const currentTimestamp = new Date().toISOString();
-          const { cachedRecordsNode, computedOptimisticRecordsNode } =
-            buildOptimisticRecordNodes(cachedRecords, currentTimestamp);
-
-          triggerUpdateRecordOptimisticEffectByBatch({
-            cache: apolloCoreClient.cache,
-            objectMetadataItem,
-            currentRecords: computedOptimisticRecordsNode,
-            updatedRecords: cachedRecordsNode,
-            objectMetadataItems,
-            objectPermissionsByObjectMetadataId,
-            upsertRecordsInStore,
-          });
-
+      await (
+        isManagedSocialProfile
+          ? retireSocialProfiles(
+              apolloMetadataClient,
+              batchedIdsToDelete,
+              abortSignal,
+            )
+          : apolloCoreClient.mutate<Record<string, ObjectRecord[]>>({
+              mutation: deleteManyRecordsMutation,
+              variables: {
+                filter: { id: { in: batchedIdsToDelete } },
+              },
+              context: {
+                fetchOptions: {
+                  signal: abortSignal,
+                },
+              },
+            })
+      ).catch((error: Error) => {
+        if (skipOptimisticEffect) {
           throw error;
+        }
+
+        const recordGqlFields = {
+          deletedAt: true,
+        };
+
+        cachedRecords.forEach((cachedRecord) => {
+          updateRecordFromCache({
+            objectMetadataItems,
+            objectMetadataItem,
+            cache: apolloCoreClient.cache,
+            record: { ...cachedRecord, deletedAt: null },
+            recordGqlFields,
+            objectPermissionsByObjectMetadataId,
+          });
         });
+
+        const currentTimestamp = new Date().toISOString();
+        const { cachedRecordsNode, computedOptimisticRecordsNode } =
+          buildOptimisticRecordNodes(cachedRecords, currentTimestamp);
+
+        triggerUpdateRecordOptimisticEffectByBatch({
+          cache: apolloCoreClient.cache,
+          objectMetadataItem,
+          currentRecords: computedOptimisticRecordsNode,
+          updatedRecords: cachedRecordsNode,
+          objectMetadataItems,
+          objectPermissionsByObjectMetadataId,
+          upsertRecordsInStore,
+        });
+
+        throw error;
+      });
 
       if (delayInMsBetweenMutations > 0) {
         await sleep(delayInMsBetweenMutations);

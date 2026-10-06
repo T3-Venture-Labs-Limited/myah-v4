@@ -108,55 +108,20 @@ describe('resolveMyahNavigationRoutes', () => {
     });
   });
 
-  it('resolves each Automation entry to its native workflow object list', () => {
+  it('keeps the hidden Automation entries out of navigation (MYAH-460)', () => {
     const resolvedRoutes = resolveMyahNavigationRoutes(
       [
         getMyahNavigationRoute('automations'),
         getMyahNavigationRoute('automation-runs'),
         getMyahNavigationRoute('automation-versions'),
       ],
-      buildSources({
-        objectMetadataItems: [
-          {
-            id: 'workflow-object-id',
-            nameSingular: 'workflow',
-            namePlural: 'workflows',
-          },
-          {
-            id: 'workflow-run-object-id',
-            nameSingular: 'workflowRun',
-            namePlural: 'workflowRuns',
-          },
-          {
-            id: 'workflow-version-object-id',
-            nameSingular: 'workflowVersion',
-            namePlural: 'workflowVersions',
-          },
-        ],
-        objectPermissionsByObjectMetadataId: {
-          'workflow-object-id': { canReadObjectRecords: true },
-          'workflow-run-object-id': { canReadObjectRecords: true },
-          'workflow-version-object-id': { canReadObjectRecords: true },
-        },
-      }),
+      buildSources({}),
     );
 
-    expect(resolvedRoutes).toMatchObject([
-      {
-        status: 'ready',
-        route: { id: 'automations' },
-        destination: { kind: 'native', path: '/objects/workflows' },
-      },
-      {
-        status: 'ready',
-        route: { id: 'automation-runs' },
-        destination: { kind: 'native', path: '/objects/workflowRuns' },
-      },
-      {
-        status: 'ready',
-        route: { id: 'automation-versions' },
-        destination: { kind: 'native', path: '/objects/workflowVersions' },
-      },
+    expect(resolvedRoutes.map(({ status }) => status)).toEqual([
+      'deferred',
+      'deferred',
+      'deferred',
     ]);
   });
 

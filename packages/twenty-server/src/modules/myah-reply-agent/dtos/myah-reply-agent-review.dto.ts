@@ -29,6 +29,24 @@ export class MyahReplyAgentDraftLabelInput {
   conversationRecordId: string;
 }
 
+@ObjectType('MyahCreatorOutreachProgress')
+export class MyahCreatorOutreachProgressDTO {
+  @Field()
+  state: string;
+
+  @Field(() => Int)
+  sentSteps: number;
+
+  @Field(() => Int)
+  totalSteps: number;
+
+  @Field(() => String, { nullable: true })
+  nextEligibleAt: string | null;
+
+  @Field(() => String, { nullable: true })
+  reason: string | null;
+}
+
 @ObjectType('MyahReplyAgentReviewNode')
 export class MyahReplyAgentReviewNodeDTO {
   @Field(() => UUIDScalarType)
@@ -36,6 +54,9 @@ export class MyahReplyAgentReviewNodeDTO {
 
   @Field(() => UUIDScalarType)
   creatorId: string;
+
+  @Field(() => MyahCreatorOutreachProgressDTO, { nullable: true })
+  outreach: MyahCreatorOutreachProgressDTO | null;
 
   // REVIEW_DRAFT | NEEDS_YOU | SENT_AUTOMATICALLY | SEND_UNKNOWN | SKIPPED | NOT_CONTACTABLE
   @Field(() => String, { nullable: true })

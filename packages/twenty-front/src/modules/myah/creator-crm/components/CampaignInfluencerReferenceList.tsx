@@ -1,3 +1,4 @@
+import { useTextFieldFocusProps } from '@/ui/utilities/focus/hooks/useTextFieldFocusProps';
 import { useQuery } from '@apollo/client/react';
 import { useListenToObjectRecordOperationBrowserEvent } from '@/browser-event/hooks/useListenToObjectRecordOperationBrowserEvent';
 import { type ObjectRecordOperation } from '@/object-record/types/ObjectRecordOperation';
@@ -12,7 +13,7 @@ import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPe
 import { type RecordIndexOpenRequest } from '@/object-record/record-index/contexts/RecordIndexContext';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
 import { styled } from '@linaria/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 type SocialProfile = ObjectRecord & {
@@ -43,7 +44,8 @@ const StyledToolbar = styled.div`
   flex-wrap: wrap;
   gap: ${themeCssVariables.spacing[2]};
   padding: ${themeCssVariables.spacing[3]};
-  input {
+  input,
+  select {
     background: ${themeCssVariables.background.primary};
     border: 1px solid ${themeCssVariables.border.color.medium};
     border-radius: ${themeCssVariables.border.radius.sm};
@@ -187,9 +189,62 @@ const NEXT_ACTION_LABELS: Record<string, string> = {
   SENT_AUTOMATICALLY: 'Replied by agent',
 };
 
+const OUTREACH_LABELS: Record<string, string> = {
+  SCHEDULED: 'Scheduled',
+  CONTACTED: 'Contacted',
+  REPLIED: 'Replied',
+  NEEDS_YOU: 'Needs you',
+  FINISHED: 'Finished',
+  EXCLUDED: 'Removed from sequence',
+  PAUSED: 'Paused',
+};
+
+const OutreachProgress = ({ node }: { node?: MyahReplyAgentReviewNode }) => {
+  if (!node) return <StyledUnavailable>Progress unavailable</StyledUnavailable>;
+  const progress = node.outreach;
+  if (!progress) return <StyledUnavailable>Not started</StyledUnavailable>;
+  if (progress.state === 'REPLIED')
+    return <StyledActionBadge>Replied</StyledActionBadge>;
+  const active =
+    progress.state === 'SCHEDULED' || progress.state === 'CONTACTED';
+  return (
+    <StyledIdentity title={progress.reason ?? undefined}>
+      <span>
+        {active
+          ? `${progress.sentSteps === 0 ? 'Scheduled · ' : ''}Step ${Math.max(1, progress.sentSteps)} of ${progress.totalSteps}`
+          : (OUTREACH_LABELS[progress.state] ?? 'Progress unavailable')}
+      </span>
+      {progress.nextEligibleAt && (
+        <span>
+          Next eligible {new Date(progress.nextEligibleAt).toLocaleString()}
+        </span>
+      )}
+    </StyledIdentity>
+  );
+};
+
 // The agent's outcome or the reason a creator was not contacted (MYAH-445).
 const NextAction = ({ node }: { node?: MyahReplyAgentReviewNode }) => {
-  if (!node?.nextAction) return <StyledUnavailable>—</StyledUnavailable>;
+  if (!node?.nextAction) {
+    const state = node?.outreach?.state;
+    return (
+      <StyledUnavailable>
+        {state === 'NEEDS_YOU'
+          ? 'Review sending issue'
+          : state === 'CONTACTED'
+            ? 'Awaiting reply or next step'
+            : state === 'SCHEDULED'
+              ? 'Waiting to send'
+              : state === 'REPLIED'
+                ? 'Follow up on reply'
+                : state === 'FINISHED'
+                  ? 'Sequence complete'
+                  : '—'}
+      </StyledUnavailable>
+    );
+  }
+  if (node.nextAction === 'NEEDS_YOU' && node.reason)
+    return <StyledWarning>Needs you · {node.reason}</StyledWarning>;
   if (node.nextAction === 'SKIPPED' || node.nextAction === 'NOT_CONTACTABLE')
     return <StyledWarning>{node.reason}</StyledWarning>;
   return (
@@ -222,11 +277,17 @@ export const CampaignInfluencerReferenceList = ({
   stageOptions: Array<{ value: string; label: string }>;
   onOpenCreatorContext?: (request: RecordIndexOpenRequest) => void;
 }) => {
+  const textFieldFocus = useTextFieldFocusProps();
   const [search, setSearch] = useState('');
   const [needReviewOnly, setNeedReviewOnly] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('');
   const agentReview = useQuery<MyahReplyAgentReviewData>(
     GET_MYAH_REPLY_AGENT_REVIEW,
-    { variables: { input: { campaignId } }, fetchPolicy: 'cache-and-network' },
+    {
+      variables: { input: { campaignId } },
+      fetchPolicy: 'cache-and-network',
+      pollInterval: 15_000,
+    },
   );
   // Memberships, handles and emails change what the agent review reports.
   const refetchAgentReview = () => void agentReview.refetch();
@@ -246,13 +307,29 @@ export const CampaignInfluencerReferenceList = ({
     onObjectRecordOperationBrowserEvent: refetchAgentReview,
   });
   const reviewByMembership = new Map(
-    (agentReview.data?.myahReplyAgentReview.nodes ?? []).map((node) => [
-      node.campaignCreatorId,
-      node,
-    ]),
+    (agentReview.error
+      ? []
+      : (agentReview.data?.myahReplyAgentReview.nodes ?? [])
+    ).map((node) => [node.campaignCreatorId, node]),
   );
+  const repliedCount = [...reviewByMembership.values()].filter(
+    (node) => node.outreach?.state === 'REPLIED',
+  ).length;
   const needReviewCount =
     agentReview.data?.myahReplyAgentReview.needReviewCount ?? 0;
+  const matchesProgressFilter = (id: string) => {
+    const node = reviewByMembership.get(id);
+    const needsReview = NEED_REVIEW_ACTIONS.includes(node?.nextAction ?? '');
+    return (
+      (!needReviewOnly || needsReview) &&
+      (!statusFilter ||
+        node?.outreach?.state === statusFilter ||
+        (statusFilter === 'NEEDS_YOU' && needsReview))
+    );
+  };
+  const progressFilteredIds = [...reviewByMembership.keys()].filter(
+    matchesProgressFilter,
+  );
   const [selectedMembershipId, setSelectedMembershipId] = useState<string>();
   const { objectMetadataItems } = useObjectMetadataItems();
   const stageFieldId = objectMetadataItems
@@ -307,7 +384,17 @@ export const CampaignInfluencerReferenceList = ({
     refetch,
   } = useFindManyRecords<Membership>({
     objectNameSingular: 'campaignCreator',
-    filter: { campaignId: { eq: campaignId } },
+    filter: {
+      campaignId: { eq: campaignId },
+      ...(statusFilter || needReviewOnly
+        ? {
+            // Empty IN is rejected by the record API; a null primary key matches nothing.
+            id: progressFilteredIds.length
+              ? { in: progressFilteredIds }
+              : { is: 'NULL' },
+          }
+        : {}),
+    },
     recordGqlFields: {
       id: true,
       campaignId: true,
@@ -324,6 +411,14 @@ export const CampaignInfluencerReferenceList = ({
     },
     skip: !campaignCreatorMetadataId,
   });
+  useEffect(() => {
+    if (!hasReadPermission || !campaignCreatorMetadataId) return;
+    const timer = window.setInterval(() => {
+      void refetch().catch(() => undefined);
+    }, 15_000);
+    return () => window.clearInterval(timer);
+  }, [refetch, hasReadPermission, campaignCreatorMetadataId]);
+
   const safeRecords =
     hasReadPermission && !error
       ? records.filter((record) => record.campaignId === campaignId)
@@ -388,10 +483,7 @@ export const CampaignInfluencerReferenceList = ({
   const normalizedSearch = search.trim().toLocaleLowerCase();
   const shownRecords = safeRecords.filter(
     (record) =>
-      (!needReviewOnly ||
-        NEED_REVIEW_ACTIONS.includes(
-          reviewByMembership.get(record.id)?.nextAction ?? '',
-        )) &&
+      matchesProgressFilter(record.id) &&
       (!normalizedSearch ||
         (canReadCreator &&
           ((canReadCreatorName &&
@@ -414,6 +506,8 @@ export const CampaignInfluencerReferenceList = ({
     <StyledList aria-label="Campaign influencers reference list">
       <StyledToolbar>
         <input
+          onFocus={textFieldFocus.onFocus}
+          onBlur={textFieldFocus.onBlur}
           aria-label="Search loaded influencers"
           placeholder="Search loaded influencers"
           type="search"
@@ -427,6 +521,21 @@ export const CampaignInfluencerReferenceList = ({
         >
           {`Need review ${needReviewCount}`}
         </button>
+        <select
+          aria-label="Outreach status"
+          value={statusFilter}
+          onChange={(event) => setStatusFilter(event.target.value)}
+        >
+          <option value="">All statuses</option>
+          {['SCHEDULED', 'CONTACTED', 'REPLIED', 'NEEDS_YOU', 'FINISHED'].map(
+            (status) => (
+              <option key={status} value={status}>
+                {OUTREACH_LABELS[status]}
+              </option>
+            ),
+          )}
+        </select>
+        {repliedCount > 0 && <span role="status">{repliedCount} replied</span>}
         <span>
           {typeof totalCount === 'number'
             ? `${safeRecords.length} loaded of ${totalCount}`
@@ -524,9 +633,7 @@ export const CampaignInfluencerReferenceList = ({
                     </span>
                   </StyledIdentity>
                 </StyledCreator>
-                <StyledUnavailable>
-                  Outreach: Not available yet
-                </StyledUnavailable>
+                <OutreachProgress node={reviewByMembership.get(record.id)} />
                 <NextAction node={reviewByMembership.get(record.id)} />
                 <StyledStage>Recorded stage: {stage}</StyledStage>
               </StyledRow>
@@ -534,17 +641,19 @@ export const CampaignInfluencerReferenceList = ({
           })}
           {shownRecords.length === 0 && (
             <StyledFeedback>
-              {normalizedSearch
-                ? canReadCreatorHandle && profilesError
-                  ? 'Profile search is unavailable. Retry profiles.'
-                  : hasMoreProfiles && canReadCreatorHandle
-                    ? 'No matches in loaded influencers or profiles. Load more profiles to search further.'
-                    : 'No matches in loaded influencers. Load more to search further.'
-                : hasNextPage
-                  ? 'No influencers in the loaded page. Load more to continue.'
-                  : totalCount === 0
-                    ? 'No influencers in this Campaign.'
-                    : 'No readable influencers in this page; audience status unknown.'}
+              {statusFilter || needReviewOnly
+                ? 'No influencers match this status.'
+                : normalizedSearch
+                  ? canReadCreatorHandle && profilesError
+                    ? 'Profile search is unavailable. Retry profiles.'
+                    : hasMoreProfiles && canReadCreatorHandle
+                      ? 'No matches in loaded influencers or profiles. Load more profiles to search further.'
+                      : 'No matches in loaded influencers. Load more to search further.'
+                  : hasNextPage
+                    ? 'No influencers in the loaded page. Load more to continue.'
+                    : totalCount === 0
+                      ? 'No influencers in this Campaign.'
+                      : 'No readable influencers in this page; audience status unknown.'}
             </StyledFeedback>
           )}
           {hasNextPage && (

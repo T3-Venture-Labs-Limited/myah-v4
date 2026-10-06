@@ -1,4 +1,7 @@
-import { ManagedProviderBillingException } from 'src/engine/core-modules/managed-provider-billing/managed-provider-billing.exception';
+import {
+  ManagedProviderBillingException,
+  ManagedProviderBillingExceptionCode,
+} from 'src/engine/core-modules/managed-provider-billing/managed-provider-billing.exception';
 
 import { AiException } from 'src/engine/metadata-modules/ai/ai.exception';
 
@@ -25,7 +28,10 @@ export const mapErrorToStreamError = (error: unknown): StreamErrorPayload => {
     return {
       code: error.code,
       message: truncateMessage(
-        error.userFriendlyMessage.message ?? error.message,
+        error.code ===
+          ManagedProviderBillingExceptionCode.INSUFFICIENT_PREPAID_BALANCE
+          ? 'Your AI usage is used up.'
+          : (error.userFriendlyMessage.message ?? error.message),
       ),
     };
   }

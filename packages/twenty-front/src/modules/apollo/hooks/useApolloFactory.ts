@@ -1,3 +1,4 @@
+import { APOLLO_CACHE_TYPE_POLICIES } from '@/apollo/constant/ApolloCacheTypePolicies';
 import { InMemoryCache } from '@apollo/client';
 import { useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -53,11 +54,7 @@ export const useApolloFactory = (options: Partial<Options> = {}) => {
     apolloRef.current = new ApolloFactory({
       uri: `${REACT_APP_SERVER_BASE_URL}/graphql`,
       cache: new InMemoryCache({
-        typePolicies: {
-          RemoteTable: {
-            keyFields: ['name'],
-          },
-        },
+        typePolicies: APOLLO_CACHE_TYPE_POLICIES,
       }),
 
       defaultOptions: {

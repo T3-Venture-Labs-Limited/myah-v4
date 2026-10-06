@@ -1,3 +1,4 @@
+import { useTextFieldFocusProps } from '@/ui/utilities/focus/hooks/useTextFieldFocusProps';
 import { getTokenPair } from '@/apollo/utils/getTokenPair';
 import { decodeCampaignCreationIdentity } from '@/apollo/utils/campaignCreationOperation';
 import { currentUserState } from '@/auth/states/currentUserState';
@@ -80,6 +81,7 @@ const StyledUnavailable = styled.span`
 `;
 
 export const CampaignPortfolioList = () => {
+  const textFieldFocus = useTextFieldFocusProps();
   const [search, setSearch] = useState('');
   const currentWorkspace = useAtomStateValue(currentWorkspaceState);
   const currentUser = useAtomStateValue(currentUserState);
@@ -145,6 +147,8 @@ export const CampaignPortfolioList = () => {
     <StyledPortfolio aria-label="Campaign portfolio">
       <StyledToolbar>
         <input
+          onFocus={textFieldFocus.onFocus}
+          onBlur={textFieldFocus.onBlur}
           type="search"
           aria-label="Search loaded campaigns"
           placeholder="Search loaded campaigns"

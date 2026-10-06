@@ -1,3 +1,4 @@
+import { MYAH_HIDDEN_OBJECT_NAME_SINGULARS } from '@/myah/navigation/constants/MyahHiddenObjectNameSingulars';
 import { useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
 import { OBJECTS_WITH_CHANNEL_VISIBILITY_CONSTRAINTS } from 'twenty-shared/constants';
@@ -47,6 +48,10 @@ export const SidePanelObjectFilterDropdownContent = ({
         item.nameSingular as (typeof OBJECTS_WITH_CHANNEL_VISIBILITY_CONSTRAINTS)[number],
       )
     ) {
+      return false;
+    }
+
+    if (MYAH_HIDDEN_OBJECT_NAME_SINGULARS.includes(item.nameSingular)) {
       return false;
     }
 

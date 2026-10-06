@@ -47,7 +47,7 @@ describe('mapErrorToStreamError', () => {
       ),
     ).toEqual({
       code: ManagedProviderBillingExceptionCode.INSUFFICIENT_PREPAID_BALANCE,
-      message: 'Insufficient prepaid balance for this operation.',
+      message: 'Your AI usage is used up.',
     });
   });
 

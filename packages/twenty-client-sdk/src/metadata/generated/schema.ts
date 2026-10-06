@@ -1751,7 +1751,7 @@ export interface CampaignEmailAccountDTO {
     __typename: 'CampaignEmailAccountDTO'
 }
 
-export type CampaignEmailAccountHealth = 'AVAILABLE' | 'RECONNECT_REQUIRED' | 'UNAVAILABLE'
+export type CampaignEmailAccountHealth = 'AVAILABLE' | 'IMPORTING' | 'RECONNECT_REQUIRED' | 'UNAVAILABLE'
 
 export interface CampaignCreatorDTO {
     id: Scalars['UUID']
@@ -3028,9 +3028,19 @@ export interface CampaignMessageOverviewConnectionDTO {
     __typename: 'CampaignMessageOverviewConnectionDTO'
 }
 
+export interface MyahCreatorOutreachProgress {
+    state: Scalars['String']
+    sentSteps: Scalars['Int']
+    totalSteps: Scalars['Int']
+    nextEligibleAt?: Scalars['String']
+    reason?: Scalars['String']
+    __typename: 'MyahCreatorOutreachProgress'
+}
+
 export interface MyahReplyAgentReviewNode {
     campaignCreatorId: Scalars['UUID']
     creatorId: Scalars['UUID']
+    outreach?: MyahCreatorOutreachProgress
     nextAction?: Scalars['String']
     reason?: Scalars['String']
     channel?: Scalars['String']
@@ -6988,9 +6998,20 @@ export interface CampaignMessageOverviewConnectionDTOGenqlSelection{
     __scalar?: boolean | number
 }
 
+export interface MyahCreatorOutreachProgressGenqlSelection{
+    state?: boolean | number
+    sentSteps?: boolean | number
+    totalSteps?: boolean | number
+    nextEligibleAt?: boolean | number
+    reason?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
 export interface MyahReplyAgentReviewNodeGenqlSelection{
     campaignCreatorId?: boolean | number
     creatorId?: boolean | number
+    outreach?: MyahCreatorOutreachProgressGenqlSelection
     nextAction?: boolean | number
     reason?: boolean | number
     channel?: boolean | number
@@ -10593,6 +10614,14 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
 
 
 
+    const MyahCreatorOutreachProgress_possibleTypes: string[] = ['MyahCreatorOutreachProgress']
+    export const isMyahCreatorOutreachProgress = (obj?: { __typename?: any } | null): obj is MyahCreatorOutreachProgress => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isMyahCreatorOutreachProgress"')
+      return MyahCreatorOutreachProgress_possibleTypes.includes(obj.__typename)
+    }
+
+
+
     const MyahReplyAgentReviewNode_possibleTypes: string[] = ['MyahReplyAgentReviewNode']
     export const isMyahReplyAgentReviewNode = (obj?: { __typename?: any } | null): obj is MyahReplyAgentReviewNode => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isMyahReplyAgentReviewNode"')
@@ -11436,6 +11465,7 @@ export const enumLogicFunctionExecutionStatus = {
 
 export const enumCampaignEmailAccountHealth = {
    AVAILABLE: 'AVAILABLE' as const,
+   IMPORTING: 'IMPORTING' as const,
    RECONNECT_REQUIRED: 'RECONNECT_REQUIRED' as const,
    UNAVAILABLE: 'UNAVAILABLE' as const
 }

@@ -1,3 +1,4 @@
+import { MYAH_HIDDEN_OBJECT_NAME_SINGULARS } from '@/myah/navigation/constants/MyahHiddenObjectNameSingulars';
 import {
   CommandMenuContext,
   type CommandMenuContextType,
@@ -5,6 +6,7 @@ import {
 import { commandMenuItemsDraftState } from '@/command-menu-item/edit/states/commandMenuItemsDraftState';
 import { commandMenuItemsSelector } from '@/command-menu-item/states/commandMenuItemsSelector';
 import { isInternalInstagramNavigationCommandMenuItem } from '@/command-menu-item/utils/isInternalInstagramNavigationCommandMenuItem';
+import { isMyahHiddenSettingsNavigationCommandMenuItem } from '@/command-menu-item/utils/isMyahHiddenSettingsNavigationCommandMenuItem';
 import { doesCommandMenuItemMatchObjectMetadataId } from '@/command-menu-item/utils/doesCommandMenuItemMatchObjectMetadataId';
 import { doesCommandMenuItemMatchPageLayoutId } from '@/command-menu-item/utils/doesCommandMenuItemMatchPageLayoutId';
 import { doesCommandMenuItemMatchPageType } from '@/command-menu-item/utils/doesCommandMenuItemMatchPageType';
@@ -41,7 +43,8 @@ export const CommandMenuContextProviderContent = ({
     const internalInstagramObjectIds = new Set(
       objectMetadataItems.flatMap(({ id, nameSingular }) =>
         nameSingular === 'myahInstagramAccount' ||
-        nameSingular === 'myahInstagramReplyDraft'
+        nameSingular === 'myahInstagramReplyDraft' ||
+        MYAH_HIDDEN_OBJECT_NAME_SINGULARS.includes(nameSingular)
           ? [id]
           : [],
       ),
@@ -49,6 +52,10 @@ export const CommandMenuContextProviderContent = ({
     const isInstagramAccountIndex =
       commandMenuContextApi.objectMetadataItem.nameSingular ===
       'myahInstagramAccount';
+    // Importing "Creator Lists" records isn't useful; creators are imported
+    // into a List from its Members section instead (MYAH-457).
+    const isCreatorListIndex =
+      commandMenuContextApi.objectMetadataItem.nameSingular === 'creatorList';
     const currentObjectMetadataItemId =
       commandMenuContextApi.objectMetadataItem.id;
     const hasSelectedRecords =
@@ -67,9 +74,18 @@ export const CommandMenuContextProviderContent = ({
         ) {
           return false;
         }
-        return !isInternalInstagramNavigationCommandMenuItem(
-          item,
-          internalInstagramObjectIds,
+        if (
+          isCreatorListIndex &&
+          item.engineComponentKey === EngineComponentKey.IMPORT_RECORDS
+        ) {
+          return false;
+        }
+        return (
+          !isMyahHiddenSettingsNavigationCommandMenuItem(item) &&
+          !isInternalInstagramNavigationCommandMenuItem(
+            item,
+            internalInstagramObjectIds,
+          )
         );
       })
       .filter(

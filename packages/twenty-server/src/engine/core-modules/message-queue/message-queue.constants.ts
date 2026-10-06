@@ -21,4 +21,7 @@ export enum MessageQueue {
   aiQueue = 'ai-queue',
   aiStreamQueue = 'ai-stream-queue',
   unipileInstagramSyncQueue = 'unipile-instagram-sync-queue',
+  // Creator messages and replies stay fast even while mailbox imports run on
+  // the messaging queue (MYAH-453).
+  myahCreatorMessageQueue = 'myah-creator-message-queue',
 }

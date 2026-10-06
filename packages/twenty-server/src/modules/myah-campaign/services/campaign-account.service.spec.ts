@@ -471,6 +471,26 @@ describe('CampaignAccountService', () => {
     ).rejects.toThrow('already linked');
   });
 
+  it.each([
+    [null, 'IMPORTING'],
+    [new Date('2026-10-05T12:00:00Z'), 'AVAILABLE'],
+  ])(
+    'distinguishes first import from ongoing sync (syncedAt=%s)',
+    async (syncedAt, health) => {
+      const harness = createHarness({
+        messageChannels: [
+          messageChannel({
+            syncStatus: MessageChannelSyncStatus.ONGOING,
+            syncedAt,
+          }),
+        ],
+      });
+      await expect(
+        harness.service.candidates(campaignId, authContext),
+      ).resolves.toEqual([expect.objectContaining({ health })]);
+    },
+  );
+
   it('retains connecting and unhealthy links, but returns unavailable candidates disabled by health', async () => {
     const harness = createHarness({
       campaignAccounts: [
@@ -913,6 +933,36 @@ describe('CampaignAccountService', () => {
         }),
       ]),
     );
+  });
+
+  it('allows a previously synced default during background import but blocks the first import', async () => {
+    const channel = messageChannel({
+      syncStatus: MessageChannelSyncStatus.ONGOING,
+      syncedAt: new Date(),
+    });
+    const harness = createHarness({
+      messageChannels: [channel],
+      campaignAccounts: [
+        {
+          id: 'default',
+          campaignId,
+          connectedAccountId: accountId,
+          messageChannelId: channelId,
+          channel: 'EMAIL',
+          isDefault: true,
+        },
+      ],
+    });
+    await expect(
+      harness.service.resolveDefaultEmailAccount(campaignId, workspaceId),
+    ).resolves.toMatchObject({ health: 'AVAILABLE' });
+    expect(
+      harness.messageOutboundService.assertConnectedAccountSendable,
+    ).toHaveBeenCalled();
+    channel.syncedAt = null;
+    await expect(
+      harness.service.resolveDefaultEmailAccount(campaignId, workspaceId),
+    ).rejects.toThrow('Campaign default email channel is unavailable');
   });
 
   it('fails closed without a single active linked default and requires transport sendability', async () => {

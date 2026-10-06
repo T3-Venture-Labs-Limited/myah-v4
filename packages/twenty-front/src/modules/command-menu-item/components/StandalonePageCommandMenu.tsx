@@ -7,6 +7,7 @@ import { PinnedCommandMenuItemButtons } from '@/command-menu-item/display/compon
 import { CommandMenuItemEditButton } from '@/command-menu-item/edit/components/CommandMenuItemEditButton';
 import { commandMenuItemsSelector } from '@/command-menu-item/states/commandMenuItemsSelector';
 import { isInternalInstagramNavigationCommandMenuItem } from '@/command-menu-item/utils/isInternalInstagramNavigationCommandMenuItem';
+import { isMyahHiddenSettingsNavigationCommandMenuItem } from '@/command-menu-item/utils/isMyahHiddenSettingsNavigationCommandMenuItem';
 import { doesCommandMenuItemMatchObjectMetadataId } from '@/command-menu-item/utils/doesCommandMenuItemMatchObjectMetadataId';
 import { doesCommandMenuItemMatchPageLayoutId } from '@/command-menu-item/utils/doesCommandMenuItemMatchPageLayoutId';
 import { isLayoutCustomizationModeEnabledState } from '@/layout-customization/states/isLayoutCustomizationModeEnabledState';
@@ -116,6 +117,7 @@ export const StandalonePageCommandMenu = () => {
     return commandMenuItems
       .filter(
         (item) =>
+          !isMyahHiddenSettingsNavigationCommandMenuItem(item) &&
           !isInternalInstagramNavigationCommandMenuItem(
             item,
             internalInstagramObjectIds,

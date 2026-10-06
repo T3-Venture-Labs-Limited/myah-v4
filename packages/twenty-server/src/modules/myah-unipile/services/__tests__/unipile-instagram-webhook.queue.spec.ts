@@ -21,7 +21,7 @@ const loadWebhookQueueModule = ():
 };
 
 describe('UnipileInstagramWebhookQueue', () => {
-  it('enqueues only the claimed event id on the messaging queue', async () => {
+  it('enqueues only the claimed event id on the creator message queue', async () => {
     const queueModule = loadWebhookQueueModule();
 
     expect(queueModule).toBeDefined();
@@ -61,6 +61,8 @@ describe('UnipileInstagramWebhookQueue', () => {
         queueModule.UnipileInstagramWebhookQueue,
       ),
     ).toHaveLength(1);
-    expect(MessageQueue.messagingQueue).toBe('messaging-queue');
+    expect(MessageQueue.myahCreatorMessageQueue).toBe(
+      'myah-creator-message-queue',
+    );
   });
 });

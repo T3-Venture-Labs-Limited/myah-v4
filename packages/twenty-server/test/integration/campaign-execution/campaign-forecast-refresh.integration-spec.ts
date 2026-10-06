@@ -267,4 +267,66 @@ describe('Campaign forecast refresh with real PostgreSQL routing', () => {
     });
     expect(new Date(row.generatedAt).getTime()).toBeGreaterThan(0);
   });
+
+  it('estimates an Instagram step from the Campaign account and its cold limit', async () => {
+    const bindingId = randomUUID();
+    const instagramAccountId = randomUUID();
+    const db = global.testDataSource;
+    try {
+      await db.query(
+        `INSERT INTO core."unipileInstagramAccountBinding"
+          (id,"workspaceId","workspaceInstagramAccountRecordId","unipileAccountId","instagramUserId",status)
+         VALUES ($1,$2,$3,'forecast-account','forecast-ig','ACTIVE')`,
+        [bindingId, workspaceId, instagramAccountId],
+      );
+      // The forecast reads only the published sequence.
+      await db.query(
+        `UPDATE "workspace_1wgvd1injqtife6y4rvfbu3h5".workflow
+            SET "lastPublishedVersionId"=$2 WHERE id=$1`,
+        [ids.workflow, ids.workflowVersion],
+      );
+      await db.query(
+        `UPDATE "workspace_1wgvd1injqtife6y4rvfbu3h5"."workflowVersion"
+            SET "campaignSequence"=$2::jsonb, status='ACTIVE' WHERE id=$1`,
+        [
+          ids.workflowVersion,
+          JSON.stringify({
+            schemaVersion: 1,
+            messages: [{ id: ids.message, channel: 'INSTAGRAM', text: 'Hi' }],
+            delaysSeconds: [],
+          }),
+        ],
+      );
+      await db.query(
+        `UPDATE core."campaignForecastHead" SET "inputRevision"="inputRevision"+1
+          WHERE "workspaceId"=$1 AND "scopeKey"=$2`,
+        [workspaceId, scopeKey],
+      );
+      await getDomainService<CampaignForecastRefreshService>(
+        'CampaignForecastRefreshService',
+      )
+        .refreshStaleForecasts(1000)
+        .catch(() => undefined);
+
+      const [entry] = await db.query(
+        `SELECT entry."connectedAccountId",entry."estimatedSendAt"
+           FROM core."campaignForecastHead" head
+           JOIN core."campaignForecastEntry" entry ON entry."generationId"=head."currentGenerationId"
+          WHERE head."workspaceId"=$1 AND head."scopeKey"=$2 AND entry."occurrenceId"=$3`,
+        [workspaceId, scopeKey, ids.occurrence],
+      );
+      expect(entry).toBeDefined();
+      expect(entry.connectedAccountId).toBeNull();
+      const estimate = new Date(entry.estimatedSendAt);
+      // Due in one hour, inside the 09:00-17:00 UTC window.
+      expect(estimate.getTime()).toBeGreaterThan(Date.now());
+      expect(estimate.getUTCHours()).toBeGreaterThanOrEqual(9);
+      expect(estimate.getUTCHours()).toBeLessThan(17);
+    } finally {
+      await db.query(
+        `DELETE FROM core."unipileInstagramAccountBinding" WHERE id=$1`,
+        [bindingId],
+      );
+    }
+  });
 });

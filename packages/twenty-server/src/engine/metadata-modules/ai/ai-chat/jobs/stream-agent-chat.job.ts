@@ -140,7 +140,6 @@ export class StreamAgentChatJob {
       throw error;
     } finally {
       stopHeartbeat();
-      await this.streamHeartbeatService.clear(data.streamId);
       await this.cancelSubscriberService.unsubscribe(cancelChannel);
       await this.threadRepository
         .update(
@@ -149,6 +148,9 @@ export class StreamAgentChatJob {
           { activeStreamId: null },
         )
         .catch(() => {});
+      // Release the claim before clearing liveness, so catchup cannot replace
+      // the real error with STREAM_INTERRUPTED during normal cleanup.
+      await this.streamHeartbeatService.clear(data.streamId);
 
       if (!abortController.signal.aborted) {
         await this.agentChatStreamingService

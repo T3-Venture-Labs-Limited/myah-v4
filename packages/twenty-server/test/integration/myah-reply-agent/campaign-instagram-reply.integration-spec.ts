@@ -4,6 +4,9 @@ import { type GlobalWorkspaceOrmManager } from 'src/engine/twenty-orm/global-wor
 import { buildSystemAuthContext } from 'src/engine/twenty-orm/utils/build-system-auth-context.util';
 import { SEED_APPLE_WORKSPACE_ID } from 'src/engine/workspace-manager/dev-seeder/core/constants/seeder-workspaces.constant';
 import { USER_WORKSPACE_DATA_SEED_IDS } from 'src/engine/workspace-manager/dev-seeder/core/utils/seed-user-workspaces.util';
+import { type AgentActorContextService } from 'src/engine/metadata-modules/ai/ai-agent-execution/services/agent-actor-context.service';
+import { type MyahReplyAgentReviewService } from 'src/modules/myah-reply-agent/services/myah-reply-agent-review.service';
+import { type MyahReplyAgentService } from 'src/modules/myah-reply-agent/services/myah-reply-agent.service';
 import { type CampaignInstagramReplyService } from 'src/modules/campaign-execution/services/campaign-instagram-reply.service';
 
 import { ensureMyahInboxContactTriageTables } from 'test/integration/myah-inbox/utils/ensure-myah-inbox-contact-triage-tables.util';
@@ -45,9 +48,14 @@ const conversation = async (input: {
   const messageId = randomUUID();
   conversations.push(conversationId);
   await query(
-    `INSERT INTO "${schema}"."myahSocialConversation" (id,"recipientUsername","providerConversationId",provider,lifecycle)
-     VALUES ($1,$2,$3,'UNIPILE','ACTIVE')`,
-    [conversationId, input.username, input.providerChatId],
+    `INSERT INTO "${schema}"."myahSocialConversation" (id,"recipientUsername","providerConversationId",provider,lifecycle,"recipientIgsid")
+     VALUES ($1,$2,$3,'UNIPILE','ACTIVE',$4)`,
+    [
+      conversationId,
+      input.username,
+      input.providerChatId,
+      `igsid-${conversationId}`,
+    ],
   );
   await query(
     `INSERT INTO "${schema}"."myahSocialMessage" (id,"conversationId",direction,text,"providerCreatedAt","providerMessageId")
@@ -210,6 +218,15 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  jest.restoreAllMocks();
+  await query(
+    `DELETE FROM core."myahAgentRun" WHERE "workspaceId"=$1 AND "creatorId"=$2`,
+    [workspaceId, ids.creator],
+  );
+  await query(
+    `DELETE FROM "${schema}"."myahInstagramReplyDraft" WHERE "conversationId"=ANY($1::uuid[])`,
+    [conversations],
+  );
   await query(
     `DELETE FROM "${schema}"."myahSocialMessage" WHERE "conversationId"=ANY($1::uuid[])`,
     [conversations],
@@ -284,6 +301,25 @@ describe('Instagram replies to Campaign steps (PostgreSQL)', () => {
   });
 
   it('links the chat by handle, stops the sequence and moves the creator to Negotiating once', async () => {
+    const actor = await getDomainService<AgentActorContextService>(
+      'AgentActorContextService',
+    ).buildUserAndAgentActorContext(
+      USER_WORKSPACE_DATA_SEED_IDS.TIM,
+      workspaceId,
+    );
+    const review = getDomainService<MyahReplyAgentReviewService>(
+      'MyahReplyAgentReviewService',
+    );
+    const progress = async () =>
+      (await review.review(ids.campaign, actor.authContext)).nodes.find(
+        (node) => node.campaignCreatorId === ids.membership,
+      )?.outreach;
+    await expect(progress()).resolves.toMatchObject({
+      state: 'CONTACTED',
+      sentSteps: 1,
+      totalSteps: 2,
+      nextEligibleAt: expect.any(String),
+    });
     const reply = await conversation({
       username: 'ava.reply',
       providerChatId: chat,
@@ -298,6 +334,65 @@ describe('Instagram replies to Campaign steps (PostgreSQL)', () => {
       enrollment: 'REPLIED',
       nextStep: 'CANCELLED:ENROLLMENT_REPLIED',
       stage: 'NEGOTIATING',
+    });
+    await expect(progress()).resolves.toMatchObject({
+      state: 'REPLIED',
+      sentSteps: 1,
+      totalSteps: 2,
+      nextEligibleAt: null,
+    });
+  });
+
+  it('turns the reply into an agent draft that Influencers and Inbox label for review', async () => {
+    const replyConversation = conversations[conversations.length - 1];
+    const agent = getDomainService<MyahReplyAgentService>(
+      'MyahReplyAgentService',
+    );
+    jest.spyOn(agent, 'generate').mockResolvedValue({
+      decision: 'REPLY',
+      body: 'So glad! Want me to send the brief?',
+      reason: '',
+      invitationIncluded: false,
+    });
+
+    await agent.run({
+      workspaceId,
+      channel: 'INSTAGRAM',
+      conversationRecordId: replyConversation,
+    });
+
+    const [draft] = await query(
+      `SELECT body FROM "${schema}"."myahInstagramReplyDraft"
+        WHERE "conversationId"=$1 AND "deletedAt" IS NULL AND "sentAt" IS NULL`,
+      [replyConversation],
+    );
+    expect(draft?.body).toBe('So glad! Want me to send the brief?');
+
+    const actor = await getDomainService<AgentActorContextService>(
+      'AgentActorContextService',
+    ).buildUserAndAgentActorContext(
+      USER_WORKSPACE_DATA_SEED_IDS.TIM,
+      workspaceId,
+    );
+    const review = getDomainService<MyahReplyAgentReviewService>(
+      'MyahReplyAgentReviewService',
+    );
+    const influencers = await review.review(ids.campaign, actor.authContext);
+    expect(
+      influencers.nodes.find((node) => node.creatorId === ids.creator),
+    ).toMatchObject({
+      nextAction: 'REVIEW_DRAFT',
+      channel: 'INSTAGRAM',
+      conversationRecordId: replyConversation,
+    });
+    expect(
+      await review.draftLabel(
+        { channel: 'INSTAGRAM', conversationRecordId: replyConversation },
+        actor.authContext,
+      ),
+    ).toMatchObject({
+      kind: 'DRAFTED',
+      campaignName: 'Instagram reply fixture',
     });
   });
 });

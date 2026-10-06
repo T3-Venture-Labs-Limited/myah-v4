@@ -22,6 +22,7 @@ import { UserMetadataProviderInitialEffect } from '@/metadata-store/effect-compo
 import { ApolloCoreProvider } from '@/object-metadata/components/ApolloCoreProvider';
 import { ApolloAdminProvider } from '@/settings/admin-panel/apollo/components/ApolloAdminProvider';
 import { EndTrialAfterPaymentMethodGater } from '@/settings/billing/components/EndTrialAfterPaymentMethodGater';
+import { SpreadsheetImportProvider } from '@/spreadsheet-import/provider/components/SpreadsheetImportProvider';
 import { SSEProvider } from '@/sse-db-event/components/SSEProvider';
 import { SupportChatEffect } from '@/support/components/SupportChatEffect';
 import { DialogManager } from '@/ui/feedback/dialog-manager/components/DialogManager';
@@ -70,6 +71,7 @@ export const WorkspaceAppProviders = () => {
                               <Outlet />
                             </DocumentTitleProvider>
                             <GlobalFilePreviewModal />
+                            <SpreadsheetImportProvider />
                             <CommandMenuConfirmationModalManager />
                             <CommandRunner />
                           </StrictMode>

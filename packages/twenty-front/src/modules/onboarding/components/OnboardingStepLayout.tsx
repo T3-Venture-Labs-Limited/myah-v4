@@ -4,10 +4,8 @@ import { useLocation } from 'react-router-dom';
 import { AppPath } from 'twenty-shared/types';
 import { OnboardingLayout } from '@/onboarding/components/OnboardingLayout';
 import { OnboardingTransitionOutlet } from '@/onboarding/components/OnboardingTransitionOutlet';
-import { useOnboardingFreeCreditsTotal } from '@/onboarding/hooks/useOnboardingFreeCreditsTotal';
 
 export const OnboardingStepLayout = () => {
-  const freeCredits = useOnboardingFreeCreditsTotal();
   const isMyahSubscriptionRequired = useAtomStateValue(
     isMyahSubscriptionRequiredState,
   );
@@ -18,10 +16,7 @@ export const OnboardingStepLayout = () => {
       pathname === AppPath.PlanRequiredSuccess);
 
   return (
-    <OnboardingLayout
-      freeCredits={isMyahSubscriptionRequired ? undefined : freeCredits}
-      hideHeader={isMyahPaywall}
-    >
+    <OnboardingLayout hideHeader={isMyahPaywall}>
       <OnboardingTransitionOutlet />
     </OnboardingLayout>
   );

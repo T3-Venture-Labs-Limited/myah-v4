@@ -327,8 +327,13 @@ describe('CampaignMessageOverviewReaderService', () => {
     expect(sql).toMatch(
       /WHEN o\.state IN \('HELD','UNKNOWN','IN_FLIGHT'\)\s+OR \(o\.state='SUCCEEDED'\s+AND \(attempt\."providerAcceptedAt" IS NULL OR attempt\."projectedMessageThreadId" IS NULL\)\)/,
     );
-    expect(sql.indexOf("THEN 'NEEDS_ATTENTION'")).toBeLessThan(
-      sql.indexOf("THEN 'SENT'"),
+    // Email arm (after the Instagram arm, which settles from its receipt).
+    const emailArm = sql.slice(
+      sql.indexOf("WHEN o.state IN ('HELD','UNKNOWN','IN_FLIGHT')"),
+    );
+
+    expect(emailArm.indexOf("THEN 'NEEDS_ATTENTION'")).toBeLessThan(
+      emailArm.indexOf("THEN 'SENT'"),
     );
   });
 

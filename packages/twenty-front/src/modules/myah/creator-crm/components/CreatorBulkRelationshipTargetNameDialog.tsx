@@ -1,10 +1,20 @@
 import { SettingsTextInput } from '@/ui/input/components/SettingsTextInput';
 import { ModalStatefulWrapper } from '@/ui/layout/modal/components/ModalStatefulWrapper';
 import { useModal } from '@/ui/layout/modal/hooks/useModal';
+import { styled } from '@linaria/react';
 import { t } from '@lingui/core/macro';
 import { useEffect, useState } from 'react';
 import { Button } from 'twenty-ui/input';
+import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { H1Title, H1TitleFontColor } from 'twenty-ui/typography';
+
+// Cancel and Create sit side by side, not stacked (MYAH-469).
+const StyledActions = styled.div`
+  display: flex;
+  gap: ${themeCssVariables.spacing[2]};
+  justify-content: flex-end;
+  margin-top: ${themeCssVariables.spacing[4]};
+`;
 
 export const CREATOR_BULK_RELATIONSHIP_TARGET_NAME_MODAL_ID =
   'creator-bulk-relationship-target-name';
@@ -73,21 +83,17 @@ export const CreatorBulkRelationshipTargetNameDialog = ({
         onInputEnter={handleCreate}
         autoFocusOnMount
       />
-      <Button
-        title={t`Cancel`}
-        variant="secondary"
-        onClick={handleClose}
-        fullWidth
-      />
-      <Button
-        title={t`Create ${targetLabel}`}
-        ariaLabel={t`Create ${targetLabel}`}
-        variant="primary"
-        accent="brand"
-        onClick={handleCreate}
-        disabled={!trimmedTargetName || isCreating}
-        fullWidth
-      />
+      <StyledActions>
+        <Button title={t`Cancel`} variant="secondary" onClick={handleClose} />
+        <Button
+          title={t`Create ${targetLabel}`}
+          ariaLabel={t`Create ${targetLabel}`}
+          variant="primary"
+          accent="brand"
+          onClick={handleCreate}
+          disabled={!trimmedTargetName || isCreating}
+        />
+      </StyledActions>
     </ModalStatefulWrapper>
   );
 };

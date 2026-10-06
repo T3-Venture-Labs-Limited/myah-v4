@@ -1,3 +1,4 @@
+import { useTextFieldFocusProps } from '@/ui/utilities/focus/hooks/useTextFieldFocusProps';
 import { getUtf8ByteLength } from 'twenty-shared/utils';
 import { useEffect, useRef, useState } from 'react';
 import { styled } from '@linaria/react';
@@ -90,6 +91,7 @@ export const CampaignSequenceMessageEditor = ({
   onChange,
   reloadGeneration,
 }: CampaignSequenceMessageEditorProps) => {
+  const textFieldFocus = useTextFieldFocusProps();
   const { uploadWorkflowFile } = useUploadWorkflowFile();
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Async upload identity, not render state: reject switched or unmounted cards.
@@ -120,6 +122,8 @@ export const CampaignSequenceMessageEditor = ({
         <label>
           Instagram message
           <textarea
+            onFocus={textFieldFocus.onFocus}
+            onBlur={textFieldFocus.onBlur}
             aria-label="Instagram message"
             disabled={!editable}
             onChange={(event) =>

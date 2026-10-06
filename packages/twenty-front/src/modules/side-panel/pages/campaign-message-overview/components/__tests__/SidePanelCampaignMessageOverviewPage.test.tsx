@@ -132,6 +132,49 @@ describe('SidePanelCampaignMessageOverviewPage', () => {
     await waitFor(() => expect(mockCloseSidePanel).toHaveBeenCalled());
   });
 
+  it('keeps the panel open with a retry when the detail request fails (MYAH-455)', async () => {
+    const refetch = jest.fn();
+    mockUseQuery.mockReturnValue({
+      data: undefined,
+      loading: false,
+      error: new Error('occurrenceId must be a UUID'),
+      refetch,
+    });
+    render(<SidePanelCampaignMessageOverviewPage />);
+
+    expect(
+      screen.getByText('Message details could not be loaded.'),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(refetch).toHaveBeenCalled();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mockCloseSidePanel).not.toHaveBeenCalled();
+  });
+
+  it('labels Instagram steps and explains why one needs attention', () => {
+    mockUseQuery.mockReturnValue({
+      data: {
+        campaignMessageOverviewDetail: {
+          ...row,
+          platform: 'Instagram',
+          status: 'NEEDS_ATTENTION',
+          sentAt: null,
+          needsAttention: true,
+          reason: 'SENDER_NOT_READY',
+        },
+      },
+      loading: false,
+    });
+    render(<SidePanelCampaignMessageOverviewPage />);
+
+    expect(
+      screen.getByText('Campaign Instagram message · Read only'),
+    ).toBeVisible();
+    expect(
+      screen.getByText(/sending account is not connected or not ready/),
+    ).toBeVisible();
+  });
+
   it('redacts and closes immediately after a workspace switch', async () => {
     workspace = { id: 'other-workspace' };
     render(<SidePanelCampaignMessageOverviewPage />);

@@ -435,6 +435,7 @@ const contact = (
   needsAttention: true,
   triage: {
     isAvailable: true,
+    unavailableReason: null,
     inboxOwnerId: null,
     inboxState: 'NEEDS_REPLY',
     snoozedUntil: null,

@@ -573,10 +573,10 @@ export class CampaignMessageOverviewReaderService {
               AND ($6::text[] IS NULL OR (CASE
                     WHEN o.state IN ('CANCELLED','SKIPPED') THEN 'CANCELLED'
                     WHEN step.channel='INSTAGRAM' THEN (CASE
-                      WHEN receipt.state IS DISTINCT FROM 'SENT' AND receipt.state IS DISTINCT FROM 'PROVIDER_ACCEPTED'
-                        AND (o.state IN ('HELD','UNKNOWN','IN_FLIGHT','SUCCEEDED') OR receipt.state IS NOT NULL) THEN 'NEEDS_ATTENTION'
                       WHEN receipt.state IN ('SENT','PROVIDER_ACCEPTED') THEN 'SENT'
-                      ELSE 'SCHEDULED' END)
+                      WHEN (o.state='IN_FLIGHT' AND (receipt.state IS NULL OR receipt.state='PROCESSING'))
+                        OR (o.state='PENDING' AND receipt.state IS DISTINCT FROM 'FAILED' AND receipt.state IS DISTINCT FROM 'UNKNOWN') THEN 'SCHEDULED'
+                      ELSE 'NEEDS_ATTENTION' END)
                     WHEN o.state IN ('HELD','UNKNOWN','IN_FLIGHT')
                       OR (o.state='SUCCEEDED'
                           AND (attempt."providerAcceptedAt" IS NULL OR attempt."projectedMessageThreadId" IS NULL))
@@ -741,7 +741,8 @@ export class CampaignMessageOverviewReaderService {
               sequenceStep: fact.authoredMessageIndex + 1,
               platform: 'Instagram',
               status,
-              estimatedSendAt: null,
+              estimatedSendAt:
+                status === 'SCHEDULED' ? iso(fact.estimatedSendAt) : null,
               sentAt: status === 'SENT' ? iso(fact.receiptAt) : null,
               eligibleAfter:
                 status === 'SENT' || status === 'CANCELLED'

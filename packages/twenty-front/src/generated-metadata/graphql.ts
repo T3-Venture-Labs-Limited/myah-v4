@@ -996,6 +996,7 @@ export type CampaignEmailAccountDto = {
 
 export enum CampaignEmailAccountHealth {
   AVAILABLE = 'AVAILABLE',
+  IMPORTING = 'IMPORTING',
   RECONNECT_REQUIRED = 'RECONNECT_REQUIRED',
   UNAVAILABLE = 'UNAVAILABLE'
 }
@@ -4957,6 +4958,15 @@ export type MyahCheckoutPrice = {
   regularAmountCents: Scalars['Float']['output'];
 };
 
+export type MyahCreatorOutreachProgress = {
+  __typename?: 'MyahCreatorOutreachProgress';
+  nextEligibleAt?: Maybe<Scalars['String']['output']>;
+  reason?: Maybe<Scalars['String']['output']>;
+  sentSteps: Scalars['Int']['output'];
+  state: Scalars['String']['output'];
+  totalSteps: Scalars['Int']['output'];
+};
+
 export type MyahReplyAgentDraftLabel = {
   __typename?: 'MyahReplyAgentDraftLabel';
   campaignName?: Maybe<Scalars['String']['output']>;
@@ -4987,6 +4997,7 @@ export type MyahReplyAgentReviewNode = {
   creatorId: Scalars['UUID']['output'];
   inboxContactId?: Maybe<Scalars['String']['output']>;
   nextAction?: Maybe<Scalars['String']['output']>;
+  outreach?: Maybe<MyahCreatorOutreachProgress>;
   reason?: Maybe<Scalars['String']['output']>;
 };
 

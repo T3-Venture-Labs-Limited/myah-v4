@@ -361,6 +361,41 @@ export class CampaignProgressionService implements CampaignProgressionPort {
         ? { status: 'CANCELLED', reason: 'AUTHORIZATION_REVOKED' }
         : { status: 'TERMINAL' };
     }
+    // A creator who has written to the brand since the first step, on any
+    // channel, gets no further automated steps (MYAH-453). Checked here at send
+    // time so a late or missed reply notification can never let a step out.
+    const reply = await this.creatorReplyAfterFirstSendInTransaction(
+      {
+        workspaceId: input.workspaceId,
+        schemaName,
+        enrollmentId: String(enrollment[0].id),
+        creatorId: String(enrollment[0].creatorId),
+      },
+      runner,
+    );
+    if (reply !== null) {
+      await this.terminalizeReplyInTransaction(
+        {
+          workspaceId: input.workspaceId,
+          campaignId: input.campaignId,
+          enrollmentId: String(enrollment[0].id),
+          inboundEvidenceId: reply,
+        },
+        manager,
+      );
+      await this.recordReplyStageInTransaction(
+        {
+          workspaceId: input.workspaceId,
+          campaignId: input.campaignId,
+          schemaName,
+          campaignCreatorId: String(enrollment[0].campaignCreatorId),
+          creatorId: String(enrollment[0].creatorId),
+          inboundEvidenceId: reply,
+        },
+        manager,
+      );
+      return { status: 'CANCELLED', reason: 'ENROLLMENT_REPLIED' };
+    }
     if (
       this.attemptService === undefined ||
       this.capacityService === undefined ||
@@ -980,9 +1015,7 @@ export class CampaignProgressionService implements CampaignProgressionPort {
   > {
     // Email-only sequences keep the original rule: the next step is next;
     // the claim checks the address. Channels matter only in mixed sequences.
-    const mixed = plan.nodes
-      .slice(fromIndex + 1)
-      .some((node) => node.channel !== 'EMAIL');
+    const mixed = plan.nodes.some((node) => node.channel !== 'EMAIL');
     let hasEmail = true;
     let hasInstagram = false;
     if (mixed) {
@@ -1114,6 +1147,7 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       happenedAt: acceptedAt.toISOString(),
       sourceId: input.occurrenceId,
       sourceType: 'OCCURRENCE' as const,
+      channel: 'INSTAGRAM' as const,
       creatorId,
     };
     await this.timelineEventWriter?.writeInTransaction(eventContext, {
@@ -1844,6 +1878,110 @@ export class CampaignProgressionService implements CampaignProgressionPort {
     return { status: processing ? 'PROCESSING_IN_FLIGHT' : 'REPLIED' };
   }
 
+  // The earliest Instagram DM or email the creator sent after this enrollment's
+  // first accepted step, or null. Instagram chats count when linked to the
+  // creator or used for this enrollment's sends; emails count by the creator's
+  // address, except mail sent from the workspace's own connected accounts.
+  private async creatorReplyAfterFirstSendInTransaction(
+    input: {
+      workspaceId: string;
+      schemaName: string;
+      enrollmentId: string;
+      creatorId: string;
+    },
+    runner: QueryRunner,
+  ): Promise<string | null> {
+    const schema = input.schemaName;
+    // Older or partial workspaces may lack a channel's tables; skip that channel.
+    const [tables] = rows(
+      await runner.query(
+        `SELECT to_regclass($1) IS NOT NULL AS instagram, to_regclass($2) IS NOT NULL AS email`,
+        [`"${schema}"."myahSocialMessage"`, `"${schema}"."messageParticipant"`],
+      ),
+    );
+    const sources: string[] = [];
+    if (tables?.instagram === true)
+      sources.push(`SELECT m.id, COALESCE(m."providerCreatedAt", m."createdAt") AS at
+             FROM "${schema}"."myahSocialMessage" m
+             JOIN "${schema}"."myahSocialConversation" c
+               ON c.id=m."conversationId" AND c."deletedAt" IS NULL
+            WHERE m.direction::text='INBOUND' AND m."deletedAt" IS NULL
+              AND (c."creatorId"=$2 OR c."providerConversationId" IN (
+                SELECT r."providerThreadExternalId" FROM core."actionExecutionReceipt" r
+                  JOIN core."campaignOccurrence" o ON o."actionExecutionReceiptId"=r.id
+                 WHERE o."enrollmentId"=$1 AND r."workspaceId"=$3))`);
+    if (tables?.email === true)
+      sources.push(`SELECT m.id, m."receivedAt" AS at
+             FROM "${schema}".message m
+             JOIN "${schema}"."messageParticipant" p
+               ON p."messageId"=m.id AND p.role::text='FROM' AND p."deletedAt" IS NULL
+             JOIN "${schema}".creator cr ON cr.id=$2 AND btrim(COALESCE(cr.email,''))<>''
+            WHERE m."deletedAt" IS NULL
+              AND lower(btrim(p.handle))=lower(btrim(cr.email))
+              AND NOT EXISTS (
+                SELECT 1 FROM core."connectedAccount" a
+                 WHERE a."workspaceId"=$3 AND lower(a.handle)=lower(btrim(p.handle)))`);
+    if (sources.length === 0) return null;
+    const [reply] = rows(
+      // pi-lens-ignore: sql-injection, no-sql-in-code — UUID-derived schema identifier; values are bind parameters.
+      await runner.query(
+        `WITH first_send AS (
+           SELECT min(o."terminalAt") AS at FROM core."campaignOccurrence" o
+            WHERE o."enrollmentId"=$1 AND o.state='SUCCEEDED'
+         ), inbound AS (
+           ${sources.join('\n           UNION ALL\n           ')}
+         )
+         SELECT inbound.id AS "replyMessageId" FROM inbound, first_send
+          WHERE first_send.at IS NOT NULL AND inbound.at > first_send.at
+          ORDER BY inbound.at, inbound.id LIMIT 1`,
+        [input.enrollmentId, input.creatorId, input.workspaceId],
+      ),
+    );
+    const replyMessageId = reply?.replyMessageId;
+    return typeof replyMessageId === 'string' && isCanonicalUuid(replyMessageId)
+      ? replyMessageId
+      : null;
+  }
+
+  // Same stage move and timeline event as the email and Instagram reply paths.
+  private async recordReplyStageInTransaction(
+    input: {
+      workspaceId: string;
+      campaignId: string;
+      schemaName: string;
+      campaignCreatorId: string;
+      creatorId: string;
+      inboundEvidenceId: string;
+    },
+    manager: WorkspaceEntityManager,
+  ): Promise<void> {
+    const runner = runnerOf(manager);
+    const updated = rows(
+      // pi-lens-ignore: sql-injection, no-sql-in-code — UUID-derived schema identifier; values are bind parameters.
+      await runner.query(
+        `UPDATE "${input.schemaName}"."campaignCreator" SET stage='NEGOTIATING', "updatedAt"=clock_timestamp()
+          WHERE id=$1 AND "campaignId"=$2 AND stage IN ('READY','CONTACTED') AND "deletedAt" IS NULL
+          RETURNING clock_timestamp() AS "happenedAt"`,
+        [input.campaignCreatorId, input.campaignId],
+      ),
+    );
+    if (updated.length !== 1) return;
+    await this.timelineEventWriter?.writeInTransaction(
+      { manager, workspaceId: input.workspaceId, campaignId: input.campaignId },
+      {
+        businessEventKey: `reply-stage:${input.inboundEvidenceId}:NEGOTIATING`,
+        eventKind: 'STAGE_CHANGED',
+        happenedAt: new Date(String(updated[0].happenedAt)).toISOString(),
+        sourceId: input.inboundEvidenceId,
+        sourceType: 'MESSAGE',
+        creatorId: input.creatorId,
+        messageId: input.inboundEvidenceId,
+        stageValue: 'NEGOTIATING',
+        stageLabel: 'Negotiating',
+      },
+    );
+  }
+
   async tryCompleteCampaignInTransaction(
     input: { workspaceId: string; campaignId: string },
     manager: WorkspaceEntityManager,
@@ -2110,6 +2248,7 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       happenedAt: acceptedAt.toISOString(),
       sourceId: input.attemptId,
       sourceType: 'ATTEMPT' as const,
+      channel: 'EMAIL' as const,
       creatorId: String(attempt.creatorId),
       messageId: String(attempt.projectedMessageId),
       messageThreadId: String(attempt.projectedMessageThreadId),

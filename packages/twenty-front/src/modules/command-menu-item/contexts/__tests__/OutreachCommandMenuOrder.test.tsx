@@ -19,10 +19,14 @@ import {
 } from '~/generated-metadata/graphql';
 
 let mockItems: CommandMenuItemFieldsFragment[] = [];
+let mockSidePanelSearch = '';
 let mockObjectMetadataItems = [
   { id: 'account', nameSingular: 'myahInstagramAccount' },
   { id: 'draft', nameSingular: 'myahInstagramReplyDraft' },
   { id: 'creator', nameSingular: 'creator' },
+  { id: 'workflow', nameSingular: 'workflow' },
+  { id: 'workflowRun', nameSingular: 'workflowRun' },
+  { id: 'workflowVersion', nameSingular: 'workflowVersion' },
 ];
 jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue', () => ({
   useAtomStateValue: (state: unknown) => {
@@ -31,22 +35,12 @@ jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue', () => ({
     if (state === currentPageLayoutIdState) return null;
     if (state === objectMetadataItemsWithFieldsSelector)
       return mockObjectMetadataItems;
-    if (state === sidePanelSearchState) return '';
+    if (state === sidePanelSearchState) return mockSidePanelSearch;
     if (state === commandMenuPinnedInlineLayoutState)
       return { containerWidth: 0, commandMenuItemWidthsByKey: {} };
     throw new Error('Unexpected menu state');
   },
 }));
-jest.mock(
-  '@/side-panel/pages/root/hooks/useFilterCommandMenuItemsWithSidePanelSearch',
-  () => ({
-    useFilterCommandMenuItemsWithSidePanelSearch: () => ({
-      filterCommandMenuItemsWithSidePanelSearch: (
-        items: CommandMenuItemFieldsFragment[],
-      ) => items,
-    }),
-  }),
-);
 jest.mock('@/side-panel/components/SidePanelList', () => ({
   SidePanelList: ({ children }: { children: ReactNode }) => (
     <div>{children}</div>
@@ -87,6 +81,7 @@ const item = (
   }) as CommandMenuItemFieldsFragment;
 
 beforeEach(() => {
+  mockSidePanelSearch = '';
   i18n.loadAndActivate({ locale: 'en', messages: {} });
   mockItems = [
     item('Search records', 41),
@@ -271,4 +266,148 @@ it('leaves Instagram first when Email and Campaign are unavailable', () => {
   expect(
     screen.getAllByRole('button').map((button) => button.textContent),
   ).toEqual(['Message on Instagram', 'Search records']);
+});
+
+it('hides "Import Creator Lists" on the Creator Lists page (MYAH-457)', () => {
+  mockItems = [
+    {
+      ...item(
+        'Import Creator Lists',
+        1,
+        null,
+        CommandMenuItemAvailabilityType.GLOBAL_OBJECT_CONTEXT,
+      ),
+      engineComponentKey: EngineComponentKey.IMPORT_RECORDS,
+    },
+    {
+      ...item(
+        'Export View',
+        2,
+        null,
+        CommandMenuItemAvailabilityType.GLOBAL_OBJECT_CONTEXT,
+      ),
+      engineComponentKey: EngineComponentKey.EXPORT_VIEW,
+    },
+  ] as CommandMenuItemFieldsFragment[];
+  render(
+    <I18nProvider i18n={i18n}>
+      <CommandMenuContextProviderContent
+        displayType="listItem"
+        containerType="command-menu-list"
+        commandMenuContextApi={{
+          ...EMPTY_COMMAND_MENU_CONTEXT_API,
+          pageType: ContextStorePageType.Index,
+          objectMetadataItem: {
+            id: 'creatorList',
+            nameSingular: 'creatorList',
+          },
+          numberOfSelectedRecords: 0,
+        }}
+        isInPreviewMode={false}
+      >
+        <SidePanelCommandMenuItemDisplayPage />
+      </CommandMenuContextProviderContent>
+    </I18nProvider>,
+  );
+
+  expect(
+    screen.getAllByRole('button').map((button) => button.textContent),
+  ).toEqual(['Export View']);
+});
+
+it.each([
+  ContextStorePageType.Index,
+  ContextStorePageType.Record,
+  ContextStorePageType.Standalone,
+])('hides Roles navigation on %s pages (MYAH-475)', (pageType) => {
+  mockItems = [
+    ['Go to Roles Settings', '/settings/roles'],
+    ['Go to Members Settings', '/settings/members'],
+  ].map(([label, path], index) => ({
+    ...item(label, index, 'permissionFlags.WORKSPACE_MEMBERS'),
+    engineComponentKey: EngineComponentKey.NAVIGATION,
+    payload: { __typename: 'PathCommandMenuItemPayload', path },
+  })) as CommandMenuItemFieldsFragment[];
+
+  const menu = () => (
+    <I18nProvider i18n={i18n}>
+      <CommandMenuContextProviderContent
+        displayType="listItem"
+        containerType="command-menu-list"
+        commandMenuContextApi={{
+          ...EMPTY_COMMAND_MENU_CONTEXT_API,
+          pageType,
+          permissionFlags: { WORKSPACE_MEMBERS: true },
+        }}
+        isInPreviewMode={false}
+      >
+        <SidePanelCommandMenuItemDisplayPage />
+      </CommandMenuContextProviderContent>
+    </I18nProvider>
+  );
+  const { rerender } = render(menu());
+
+  expect(
+    screen.queryAllByRole('button').map((button) => button.textContent),
+  ).toEqual(['Go to Members Settings']);
+
+  // Live metadata updates replace Apollo payloads with raw JSON (no typename).
+  mockItems = mockItems.map((command) => ({
+    ...command,
+    payload: {
+      path: (command.payload as { path: string }).path,
+    },
+  })) as CommandMenuItemFieldsFragment[];
+  rerender(menu());
+  expect(
+    screen.queryAllByRole('button').map((button) => button.textContent),
+  ).toEqual(['Go to Members Settings']);
+
+  for (const search of ['roles', 'Go to roles']) {
+    mockSidePanelSearch = search;
+    rerender(menu());
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+  }
+
+  mockSidePanelSearch = 'members';
+  rerender(menu());
+  expect(
+    screen.queryAllByRole('button').map((button) => button.textContent),
+  ).toEqual(['Go to Members Settings']);
+});
+
+it('hides navigation to Automations, runs and versions (MYAH-460)', () => {
+  mockItems = [
+    ['Go to Workflows', 'workflow'],
+    ['Go to Workflow runs', 'workflowRun'],
+    ['Go to Workflow versions', 'workflowVersion'],
+    ['Go to Creators', 'creator'],
+  ].map(([label, objectMetadataItemId], index) => ({
+    ...item(label, index),
+    engineComponentKey: EngineComponentKey.NAVIGATION,
+    payload: {
+      __typename: 'ObjectMetadataCommandMenuItemPayload',
+      objectMetadataItemId,
+    },
+  })) as CommandMenuItemFieldsFragment[];
+  render(
+    <I18nProvider i18n={i18n}>
+      <CommandMenuContextProviderContent
+        displayType="listItem"
+        containerType="command-menu-list"
+        commandMenuContextApi={{
+          ...EMPTY_COMMAND_MENU_CONTEXT_API,
+          pageType: ContextStorePageType.Index,
+          objectMetadataItem: { id: 'creator', nameSingular: 'creator' },
+        }}
+        isInPreviewMode={false}
+      >
+        <SidePanelCommandMenuItemDisplayPage />
+      </CommandMenuContextProviderContent>
+    </I18nProvider>,
+  );
+
+  expect(
+    screen.getAllByRole('button').map((button) => button.textContent),
+  ).toEqual(['Go to Creators']);
 });
