@@ -87,6 +87,9 @@ jest.mock('@/ui/layout/modal/components/ConfirmationModal', () => ({
 jest.mock('@/page-layout/components/MyahCampaignEmailAccounts', () => ({
   MyahCampaignEmailAccounts: () => null,
 }));
+jest.mock('@/myah/agent/components/MyahCampaignInstagramAccount', () => ({
+  MyahCampaignInstagramAccount: () => null,
+}));
 jest.mock('@/page-layout/components/MyahCampaignRichTextSettings', () => ({
   MyahCampaignRichTextSettings: ({
     contentBeforeFields,
