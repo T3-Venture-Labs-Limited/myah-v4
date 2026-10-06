@@ -1131,6 +1131,7 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       happenedAt: acceptedAt.toISOString(),
       sourceId: input.occurrenceId,
       sourceType: 'OCCURRENCE' as const,
+      channel: 'INSTAGRAM' as const,
       creatorId,
     };
     await this.timelineEventWriter?.writeInTransaction(eventContext, {
@@ -2231,6 +2232,7 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       happenedAt: acceptedAt.toISOString(),
       sourceId: input.attemptId,
       sourceType: 'ATTEMPT' as const,
+      channel: 'EMAIL' as const,
       creatorId: String(attempt.creatorId),
       messageId: String(attempt.projectedMessageId),
       messageThreadId: String(attempt.projectedMessageThreadId),

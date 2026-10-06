@@ -47,6 +47,7 @@ export type CampaignTimelineEventInput = Readonly<{
     | 'ATTEMPT'
     | 'MESSAGE';
   creatorId?: string;
+  channel?: 'EMAIL' | 'INSTAGRAM';
   reason?: string;
   messageId?: string;
   messageThreadId?: string;
@@ -105,6 +106,7 @@ export class CampaignTimelineEventWriterService {
         eventKind: input.eventKind,
         sourceType: input.sourceType,
         sourceId: input.sourceId,
+        ...(input.channel ? { channel: input.channel } : {}),
         ...(input.reason ? { reason: input.reason } : {}),
         ...(input.messageId ? { messageId: input.messageId } : {}),
         ...(input.messageThreadId
