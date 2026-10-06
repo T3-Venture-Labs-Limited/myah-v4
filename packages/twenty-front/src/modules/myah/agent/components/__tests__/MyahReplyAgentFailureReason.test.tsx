@@ -1,4 +1,6 @@
 import { MockedProvider } from '@apollo/client/testing/react';
+import { i18n } from '@lingui/core';
+import { I18nProvider } from '@lingui/react';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -16,34 +18,36 @@ const showLabel = (reason: string, billingAllowed = true) => {
     [PermissionFlagType.BILLING]: billingAllowed,
   } as ReturnType<typeof usePermissionFlagMap>);
   return render(
-    <MemoryRouter>
-      <MockedProvider
-        mocks={[
-          {
-            request: {
-              query: GET_MYAH_REPLY_AGENT_DRAFT_LABEL,
-              variables: {
-                input: { channel: 'EMAIL', conversationRecordId: 'thread-1' },
+    <I18nProvider i18n={i18n}>
+      <MemoryRouter>
+        <MockedProvider
+          mocks={[
+            {
+              request: {
+                query: GET_MYAH_REPLY_AGENT_DRAFT_LABEL,
+                variables: {
+                  input: { channel: 'EMAIL', conversationRecordId: 'thread-1' },
+                },
               },
-            },
-            result: {
-              data: {
-                myahReplyAgentDraftLabel: {
-                  kind: 'NEEDS_YOU',
-                  reason,
-                  campaignName: null,
+              result: {
+                data: {
+                  myahReplyAgentDraftLabel: {
+                    kind: 'NEEDS_YOU',
+                    reason,
+                    campaignName: null,
+                  },
                 },
               },
             },
-          },
-        ]}
-      >
-        <MyahReplyAgentDraftLabel
-          channel="EMAIL"
-          conversationRecordId="thread-1"
-        />
-      </MockedProvider>
-    </MemoryRouter>,
+          ]}
+        >
+          <MyahReplyAgentDraftLabel
+            channel="EMAIL"
+            conversationRecordId="thread-1"
+          />
+        </MockedProvider>
+      </MemoryRouter>
+    </I18nProvider>,
   );
 };
 
