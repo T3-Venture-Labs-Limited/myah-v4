@@ -28,6 +28,7 @@ import {
 import {
   type UnipileInstagramChat,
   type UnipileInstagramMessage,
+  isUnipileInstagramProviderNotice,
   unipileInstagramMessageDirection,
 } from 'src/modules/myah-unipile/types/unipile-v1.type';
 
@@ -436,8 +437,7 @@ export class UnipileInstagramSyncService {
       for (const listedMessage of page.messages) {
         if (
           listedMessage.deleted ||
-          listedMessage.hidden ||
-          listedMessage.isEvent
+          isUnipileInstagramProviderNotice(listedMessage)
         ) {
           continue;
         }
@@ -460,7 +460,7 @@ export class UnipileInstagramSyncService {
           input.chat,
           listedMessage.messageId,
         );
-        if (message.deleted || message.hidden || message.isEvent) {
+        if (message.deleted || isUnipileInstagramProviderNotice(message)) {
           continue;
         }
 
