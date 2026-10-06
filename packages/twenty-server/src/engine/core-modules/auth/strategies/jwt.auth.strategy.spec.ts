@@ -353,6 +353,53 @@ describe('JwtAuthStrategy', () => {
       expect(user.userWorkspaceId).toBe(validUserWorkspaceId);
     });
 
+    it('resolves the workspace member for a token minted before workspace activation', async () => {
+      const validUserId = 'valid-user-id';
+      const validUserWorkspaceId = randomUUID();
+      const validWorkspaceId = randomUUID();
+
+      // Tokens issued while the workspace was still being created carry no
+      // workspaceMemberId; the browser keeps using them after activation.
+      const payload = {
+        sub: validUserId,
+        type: JwtTokenTypeEnum.ACCESS,
+        userWorkspaceId: validUserWorkspaceId,
+        workspaceId: validWorkspaceId,
+      };
+
+      workspaceStore[validWorkspaceId] = new WorkspaceEntity();
+      userStore[validUserId] = { id: validUserId };
+
+      coreEntityCacheService.get.mockImplementation(
+        async (keyName: string, entityId: string) => {
+          if (keyName === 'workspaceEntity') {
+            return workspaceStore[entityId] ?? null;
+          }
+
+          if (keyName === 'user') {
+            return userStore[entityId] ?? null;
+          }
+
+          if (keyName === 'userWorkspaceEntity') {
+            return {
+              id: validUserWorkspaceId,
+              user: { id: validUserId },
+              workspace: { id: validWorkspaceId },
+            };
+          }
+
+          return null;
+        },
+      );
+
+      strategy = createStrategy();
+
+      const context = await strategy.validate(payload as JwtPayload);
+
+      expect(context.workspaceMemberId).toBe('workspace-member-id');
+      expect(context.workspaceMember?.id).toBe('workspace-member-id');
+    });
+
     it('should reject when the user workspace belongs to a different workspace than the token', async () => {
       const validUserId = 'valid-user-id';
       const validUserWorkspaceId = randomUUID();

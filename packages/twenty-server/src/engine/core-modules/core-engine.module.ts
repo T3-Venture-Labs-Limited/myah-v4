@@ -42,6 +42,7 @@ import { FeatureFlagModule } from 'src/engine/core-modules/feature-flag/feature-
 import { FileStorageModule } from 'src/engine/core-modules/file-storage/file-storage.module';
 import { GeoMapModule } from 'src/engine/core-modules/geo-map/geo-map-module';
 import { HealthModule } from 'src/engine/core-modules/health/health.module';
+import { SentryTunnelModule } from 'src/engine/core-modules/sentry/sentry-tunnel.module';
 import { ImapSmtpCaldavModule } from 'src/engine/core-modules/imap-smtp-caldav-connection/imap-smtp-caldav-connection.module';
 import { ImpersonationModule } from 'src/engine/core-modules/impersonation/impersonation.module';
 import { LabModule } from 'src/engine/core-modules/lab/lab.module';
@@ -97,6 +98,7 @@ import { FileModule } from './file/file.module';
     EnvironmentModule,
     TwentyConfigModule.forRoot(),
     HealthModule,
+    SentryTunnelModule,
     AuthModule,
     BillingModule,
     BillingWebhookModule,

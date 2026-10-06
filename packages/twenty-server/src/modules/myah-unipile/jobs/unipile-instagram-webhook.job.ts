@@ -1,4 +1,4 @@
-import { Scope } from '@nestjs/common';
+import { Logger, Scope } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, IsNull } from 'typeorm';
 
@@ -26,6 +26,8 @@ import {
   UnipileV1ClientService,
 } from 'src/modules/myah-unipile/services/unipile-v1-client.service';
 
+import { isUnipileInstagramProviderNotice } from 'src/modules/myah-unipile/types/unipile-v1.type';
+
 const RETRY_BASE_DELAY_MS = 60_000;
 const RETRY_MAX_DELAY_MS = 60 * 60 * 1000;
 
@@ -52,6 +54,8 @@ type ClaimedWebhookEvent = {
   scope: Scope.REQUEST,
 })
 export class UnipileInstagramWebhookJob {
+  private readonly logger = new Logger(UnipileInstagramWebhookJob.name);
+
   constructor(
     @InjectDataSource()
     private readonly dataSource: DataSource,
@@ -173,6 +177,15 @@ export class UnipileInstagramWebhookJob {
             occurredAt: claimed.event.reactionOccurredAt!,
             version: claimed.event.eventFingerprint,
           });
+        } else if (isUnipileInstagramProviderNotice(message)) {
+          this.logger.log(
+            `UNIPILE_INSTAGRAM_WEBHOOK_PROVIDER_NOTICE_SKIPPED ${JSON.stringify(
+              {
+                eventId: claimed.event.id,
+                eventType: claimed.event.eventType,
+              },
+            )}`,
+          );
         } else {
           const { conversationRecordId } =
             await this.projectionService.upsertVerifiedChat({

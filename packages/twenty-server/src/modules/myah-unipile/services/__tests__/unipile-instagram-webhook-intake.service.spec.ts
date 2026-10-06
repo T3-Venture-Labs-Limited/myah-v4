@@ -98,6 +98,85 @@ const messageReceivedBody = {
   webhook_name: 'message_received',
 };
 
+// Captured v1 envelope shape; all identifiers, names and values are synthetic.
+const reactionBody = {
+  ...messageReceivedBody,
+  account_info: {
+    type: 'INSTAGRAM',
+    user_id: instagramOwnerId,
+    username: 'synthetic-owner',
+  },
+  attachments: [],
+  attendees: [
+    {
+      attendee_id: 'remote-attendee-id',
+      attendee_name: 'Synthetic Remote',
+      attendee_profile_url: 'https://instagram.example/synthetic',
+      attendee_provider_id: instagramRemoteId,
+      attendee_public_identifier: null,
+      attendee_specifics: {
+        provider: 'INSTAGRAM',
+        public_identifier: 'synthetic-remote',
+        relationship_status: {
+          followed_by: false,
+          following: false,
+          has_received_invitation: false,
+          has_sent_invitation: false,
+        },
+      },
+    },
+  ],
+  event: 'message_reaction',
+  sender: {
+    attendee_id: 'owner-attendee-id',
+    attendee_name: 'Synthetic Owner',
+    attendee_profile_url: 'https://instagram.example/owner',
+    attendee_provider_id: instagramOwnerId,
+    attendee_public_identifier: null,
+    attendee_specifics: {
+      provider: 'INSTAGRAM',
+      public_identifier: 'synthetic-owner',
+      relationship_status: {},
+    },
+  },
+  reaction: '👍',
+  reaction_sender: {
+    attendee_id: 'remote-attendee-id',
+    attendee_name: 'Synthetic Remote',
+    attendee_profile_picture_url: 'https://instagram.example/picture',
+    attendee_profile_url: 'https://instagram.example/synthetic',
+    attendee_provider_id: instagramRemoteId,
+    attendee_public_identifier: null,
+    attendee_specifics: {
+      provider: 'INSTAGRAM',
+      public_identifier: 'synthetic-remote',
+      relationship_status: {
+        followed_by: false,
+        following: false,
+        has_received_invitation: false,
+        has_sent_invitation: false,
+      },
+    },
+  },
+};
+const reactionExtraFields = {
+  chat_content_type: null,
+  chat_pinned: 0,
+  event_type: null,
+  folder: ['INBOX'],
+  is_event: 0,
+  is_forwarded: null,
+  is_group: false,
+  is_sender: true,
+  is_view_once: null,
+  message_type: null,
+  provider_chat_id: 'private-extra-value',
+  provider_message_id: 'private-extra-value',
+  quoted: null,
+  reply_to: null,
+  subject: 'private-extra-value',
+};
+
 const createHarness = (input?: {
   binding?: Binding | null;
   event?: WebhookEvent | null;
@@ -544,6 +623,111 @@ describe('UnipileInstagramWebhookIntakeService', () => {
     );
   });
 
+  it('accepts the captured reaction envelope without storing or fingerprinting extras', async () => {
+    const harness = createHarness();
+    const service = createService(harness);
+
+    await expect(
+      service.intake({
+        body: { ...reactionBody, ...reactionExtraFields },
+        secret: 'shared-webhook-secret',
+      }),
+    ).resolves.toEqual({ ok: true, duplicate: false });
+    await service.intake({
+      body: reactionBody,
+      secret: 'shared-webhook-secret',
+    });
+
+    const [withExtras, withoutExtras] =
+      harness.eventRepository.create.mock.calls.map(([event]) => event);
+    expect(withExtras).toEqual({
+      ...withoutExtras,
+      reactionOccurredAt: withExtras.reactionOccurredAt,
+    });
+    expect(withExtras).toMatchObject({
+      eventType: 'MESSAGE_REACTION',
+      reactionValue: '👍',
+      reactionActorProviderId: instagramRemoteId,
+    });
+    for (const key of Object.keys(reactionExtraFields)) {
+      expect(withExtras).not.toHaveProperty(key);
+    }
+    expect(JSON.stringify(withExtras)).not.toContain('private-extra-value');
+    expect(JSON.stringify(withExtras)).not.toContain('Synthetic Remote');
+  });
+
+  it('logs only bounded identifier-shaped unexpected reaction field names', async () => {
+    const harness = createHarness();
+    const service = createService(harness);
+    const log = jest
+      .spyOn(Logger.prototype, 'log')
+      .mockImplementation(() => undefined);
+    try {
+      const extras = {
+        ...reactionExtraFields,
+        nested_metadata: { secret: 'private-extra-value' },
+        'private name 👍': 'private-extra-value',
+        ...Object.fromEntries(
+          Array.from({ length: 60 }, (_, i) => [
+            `long_${String(i).padStart(2, '0')}_${'x'.repeat(55)}`,
+            'private-extra-value',
+          ]),
+        ),
+      };
+      await service.intake({
+        body: { ...reactionBody, ...extras },
+        secret: 'shared-webhook-secret',
+      });
+      const diagnostics = log.mock.calls
+        .map(([line]) => String(line))
+        .filter((line) =>
+          line.startsWith('UNIPILE_INSTAGRAM_WEBHOOK_UNEXPECTED_FIELDS '),
+        );
+      expect(diagnostics).toHaveLength(1);
+      const line = diagnostics[0];
+      const diagnostic = JSON.parse(line.slice(line.indexOf(' ') + 1));
+      expect(diagnostic.event).toBe('message_reaction');
+      expect(diagnostic.fields).toEqual([...diagnostic.fields].sort());
+      expect(diagnostic.fields).toEqual(
+        expect.arrayContaining(['chat_content_type', 'is_event']),
+      );
+      expect(diagnostic.fields.length).toBeLessThanOrEqual(50);
+      expect(
+        diagnostic.fields.every((name: string) =>
+          /^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(name),
+        ),
+      ).toBe(true);
+      expect(diagnostic.omittedFieldCount).toBe(
+        Object.keys(extras).length - diagnostic.fields.length,
+      );
+      expect(line.length).toBeLessThan(2000);
+      for (const forbidden of [
+        'private-extra-value',
+        'private name',
+        reactionBody.message,
+        'Synthetic Remote',
+        'https://',
+        'shared-webhook-secret',
+      ]) {
+        expect(line).not.toContain(forbidden);
+      }
+      log.mockClear();
+      await service.intake({
+        body: reactionBody,
+        secret: 'shared-webhook-secret',
+      });
+      await expect(
+        service.intake({
+          body: { ...reactionBody, ...extras },
+          secret: 'wrong',
+        }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(log).not.toHaveBeenCalled();
+    } finally {
+      log.mockRestore();
+    }
+  });
+
   it('accepts a mapped v1 creator reaction with only bounded actor/value/timestamp stored', async () => {
     const harness = createHarness();
     const service = createService(harness);
@@ -569,13 +753,67 @@ describe('UnipileInstagramWebhookIntakeService', () => {
       eventType: 'MESSAGE_REACTION',
       reactionValue: '👍',
       reactionActorProviderId: instagramRemoteId,
-      reactionOccurredAt: new Date(messageReceivedBody.timestamp),
+      reactionOccurredAt: expect.any(Date),
       attendeeProviderId: instagramRemoteId,
       unipileMessageId: messageReceivedBody.message_id,
     });
     expect(JSON.stringify(stored)).not.toContain('Private name');
     expect(JSON.stringify(stored)).not.toContain(messageReceivedBody.message);
     expect(JSON.stringify(stored)).not.toContain('reaction_sender');
+  });
+
+  it('uses first receipt time while keeping replay identity independent of the clock', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-10-05T12:00:00.000Z'));
+    try {
+      const harness = createHarness();
+      const service = createService(harness);
+      // Faithful persistence boundary: fingerprints locate previously saved events.
+      const events = new Map<string, WebhookEvent>();
+      harness.eventRepository.findOne.mockImplementation(
+        async ({ where }) => events.get(where.eventFingerprint) ?? null,
+      );
+      harness.eventRepository.save.mockImplementation(async (event) => {
+        events.set(event.eventFingerprint, { ...event, status: 'COMPLETED' });
+        return event;
+      });
+      await service.intake({
+        body: reactionBody,
+        secret: 'shared-webhook-secret',
+      });
+      const first = harness.eventRepository.create.mock.calls[0][0];
+      expect(first.reactionOccurredAt).toEqual(
+        new Date('2026-10-05T12:00:00.000Z'),
+      );
+      jest.setSystemTime(new Date('2026-10-05T12:01:00.000Z'));
+      await expect(
+        service.intake({
+          body: { ...reactionBody, ...reactionExtraFields },
+          secret: 'shared-webhook-secret',
+        }),
+      ).resolves.toEqual({ ok: true, duplicate: true });
+      expect(harness.eventRepository.create).toHaveBeenCalledTimes(1);
+      expect(first.reactionOccurredAt).toEqual(
+        new Date('2026-10-05T12:00:00.000Z'),
+      );
+      await service.intake({
+        body: { ...reactionBody, reaction: '❤' },
+        secret: 'shared-webhook-secret',
+      });
+      const second = harness.eventRepository.create.mock.calls[1][0];
+      expect(second.reactionOccurredAt).toEqual(
+        new Date('2026-10-05T12:01:00.000Z'),
+      );
+      expect(second.eventFingerprint).not.toBe(first.eventFingerprint);
+      jest.setSystemTime(new Date('2026-10-05T12:02:00.000Z'));
+      // Returning to a seen emoji is indistinguishable from replay: owner-approved limitation.
+      await expect(
+        service.intake({ body: reactionBody, secret: 'shared-webhook-secret' }),
+      ).resolves.toEqual({ ok: true, duplicate: true });
+      expect(harness.eventRepository.create).toHaveBeenCalledTimes(2);
+      expect(harness.webhookQueue.enqueue).toHaveBeenCalledTimes(2);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('deduplicates a replayed reaction but fingerprints an emoji change independently', async () => {
@@ -617,7 +855,7 @@ describe('UnipileInstagramWebhookIntakeService', () => {
     ['missing actor', { reaction_sender: undefined }],
     ['malformed actor', { reaction_sender: { attendee_provider_id: 1 } }],
   ])(
-    'rejects a reaction with %s before persistence',
+    'rejects a reaction with extras and %s before persistence',
     async (_name, override) => {
       const harness = createHarness();
       const service = createService(harness);
@@ -625,10 +863,8 @@ describe('UnipileInstagramWebhookIntakeService', () => {
       await expect(
         service.intake({
           body: {
-            ...messageReceivedBody,
-            event: 'message_reaction',
-            reaction: '👍',
-            reaction_sender: { attendee_provider_id: instagramRemoteId },
+            ...reactionBody,
+            ...reactionExtraFields,
             ...override,
           },
           secret: 'shared-webhook-secret',

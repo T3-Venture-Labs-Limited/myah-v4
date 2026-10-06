@@ -27,6 +27,7 @@ const StyledEditor = styled.div`
 `;
 
 const StyledContent = styled.div`
+  align-content: start;
   display: grid;
   flex: 1;
   gap: ${themeCssVariables.spacing[5]};

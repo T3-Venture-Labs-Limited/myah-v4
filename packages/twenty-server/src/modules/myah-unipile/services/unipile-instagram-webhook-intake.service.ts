@@ -24,6 +24,8 @@ import {
 import { UnipileInstagramAvailabilityService } from 'src/modules/myah-unipile/services/unipile-instagram-availability.service';
 import { UnipileInstagramWebhookQueue } from 'src/modules/myah-unipile/services/unipile-instagram-webhook.queue';
 
+const MAX_UNEXPECTED_FIELD_NAMES = 50;
+const MAX_UNEXPECTED_FIELD_NAME_CHARACTERS = 1_500;
 const MAX_VALIDATION_DIAGNOSTIC_ISSUES = 8;
 const MAX_VALIDATION_DIAGNOSTIC_PATH_DEPTH = 6;
 const MAX_VALIDATION_DIAGNOSTIC_ARRAY_INDEX = 9_999;
@@ -135,13 +137,15 @@ const messageWebhookSchema = z
     webhook_name: z.string().trim().min(1).max(128),
   })
   .strict();
-const reactionWebhookSchema = messageWebhookSchema.extend({
-  event: z.literal('message_reaction'),
-  reaction: z.string().trim().min(1).max(64),
-  reaction_sender: attendeeSchema.extend({
-    attendee_provider_id: z.string().trim().min(1).max(256),
-  }),
-});
+const reactionWebhookSchema = messageWebhookSchema
+  .extend({
+    event: z.literal('message_reaction'),
+    reaction: z.string().trim().min(1).max(64),
+    reaction_sender: attendeeSchema.extend({
+      attendee_provider_id: z.string().trim().min(1).max(256),
+    }),
+  })
+  .strip();
 const accountStatusWebhookSchema = z
   .object({
     AccountStatus: z
@@ -182,7 +186,6 @@ type NormalizedWebhookPayload = {
   eventType: UnipileInstagramWebhookEventType;
   messageId: string | null;
   reactionActorProviderId?: string;
-  reactionOccurredAt?: Date;
   reactionValue?: string;
   timestamp: string | null;
 };
@@ -212,6 +215,7 @@ export class UnipileInstagramWebhookIntakeService {
   }): Promise<{ ok: true; duplicate: boolean }> {
     this.availabilityService.assertEnabled();
     this.assertSecret(input.secret);
+    const receivedAt = new Date();
 
     const parsedPayload = webhookPayloadSchema.safeParse(input.body);
     if (!parsedPayload.success) {
@@ -222,8 +226,19 @@ export class UnipileInstagramWebhookIntakeService {
       );
     }
 
+    if (
+      'event' in parsedPayload.data &&
+      parsedPayload.data.event === 'message_reaction'
+    ) {
+      this.logUnexpectedReactionFields(input.body as Record<string, unknown>);
+    }
+
     const payload = this.normalize(parsedPayload.data);
-    const claimed = await this.claim(payload, this.fingerprint(payload));
+    const claimed = await this.claim(
+      payload,
+      this.fingerprint(payload),
+      receivedAt,
+    );
     if (!claimed.shouldEnqueue) {
       return { ok: true, duplicate: claimed.duplicate };
     }
@@ -231,6 +246,40 @@ export class UnipileInstagramWebhookIntakeService {
     await this.webhookQueue.enqueue(claimed.event.id);
 
     return { ok: true, duplicate: claimed.duplicate };
+  }
+
+  private logUnexpectedReactionFields(body: Record<string, unknown>): void {
+    const unexpected = Object.keys(body).filter(
+      (name) =>
+        !Object.prototype.hasOwnProperty.call(
+          reactionWebhookSchema.shape,
+          name,
+        ),
+    );
+    if (unexpected.length === 0) {
+      return;
+    }
+
+    const fields: string[] = [];
+    let characters = 0;
+    for (const name of unexpected.sort()) {
+      if (
+        !/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(name) ||
+        fields.length >= MAX_UNEXPECTED_FIELD_NAMES ||
+        characters + name.length + 3 > MAX_UNEXPECTED_FIELD_NAME_CHARACTERS
+      ) {
+        continue;
+      }
+      fields.push(name);
+      characters += name.length + 3;
+    }
+    this.logger.log(
+      `UNIPILE_INSTAGRAM_WEBHOOK_UNEXPECTED_FIELDS ${JSON.stringify({
+        event: 'message_reaction',
+        fields,
+        omittedFieldCount: unexpected.length - fields.length,
+      })}`,
+    );
   }
 
   private logValidationFailure(issues: readonly ValidationIssue[]): void {
@@ -378,7 +427,6 @@ export class UnipileInstagramWebhookIntakeService {
             reactionValue: payload.reaction,
             reactionActorProviderId:
               payload.reaction_sender.attendee_provider_id,
-            reactionOccurredAt: new Date(payload.timestamp),
           }
         : {}),
       timestamp: payload.timestamp,
@@ -388,6 +436,7 @@ export class UnipileInstagramWebhookIntakeService {
   private async claim(
     payload: NormalizedWebhookPayload,
     fingerprint: string,
+    receivedAt: Date,
   ): Promise<ClaimedEvent> {
     return this.dataSource.transaction(async (manager) => {
       const bindingRepository = manager.getRepository(
@@ -457,7 +506,8 @@ export class UnipileInstagramWebhookIntakeService {
           ? {
               reactionValue: payload.reactionValue,
               reactionActorProviderId: payload.reactionActorProviderId,
-              reactionOccurredAt: payload.reactionOccurredAt,
+              // v1 timestamp belongs to the parent. Receipt time must not enter the fingerprint.
+              reactionOccurredAt: receivedAt,
             }
           : {}),
         deliveryState: payload.deliveryState,

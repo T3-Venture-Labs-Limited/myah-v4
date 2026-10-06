@@ -4,6 +4,7 @@ import { MyahSubscriptionReconciliationCommand } from 'src/engine/core-modules/m
 import { Command, CommandRunner } from 'nest-commander';
 import { isDefined } from 'twenty-shared/utils';
 
+import { RetiredCronJobsCleanupCommand } from 'src/database/commands/retired-cron-jobs-cleanup.command';
 import { ActionApprovalReconciliationCronCommand } from 'src/engine/core-modules/action-approval/crons/commands/action-approval-reconciliation.cron.command';
 import { MarketplaceCatalogSyncCronCommand } from 'src/engine/core-modules/application/application-marketplace/crons/commands/marketplace-catalog-sync.cron.command';
 import { StaleRegistrationCleanupCronCommand } from 'src/engine/core-modules/application/application-oauth/stale-registration-cleanup/commands/stale-registration-cleanup.cron.command';
@@ -70,6 +71,7 @@ export class CronRegisterAllCommand extends CommandRunner {
     private readonly managedEmailReconciliationCronCommand: ManagedEmailReconciliationCronCommand,
     private readonly instagramMessageReconciliationCronCommand: InstagramMessageReconciliationCronCommand,
     private readonly unipileInstagramAccountRecoveryCronCommand: UnipileInstagramAccountRecoveryCronCommand,
+    private readonly retiredCronJobsCleanupCommand: RetiredCronJobsCleanupCommand,
     private readonly twentyConfigService: TwentyConfigService,
     private readonly myahSubscriptionReconciliationCommand: MyahSubscriptionReconciliationCommand,
   ) {
@@ -97,6 +99,10 @@ export class CronRegisterAllCommand extends CommandRunner {
     );
 
     const allCommands = [
+      {
+        name: 'RetiredCronJobsCleanup',
+        command: this.retiredCronJobsCleanupCommand,
+      },
       {
         name: 'MyahSubscriptionReconciliation',
         // Always registered: flipping the paywall flag in the database must not

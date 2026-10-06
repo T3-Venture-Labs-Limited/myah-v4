@@ -175,6 +175,25 @@ describe('SidePanelCampaignMessageOverviewPage', () => {
     ).toBeVisible();
   });
 
+  it('says a cancelled step was not sent instead of an unavailable eligible time', () => {
+    mockUseQuery.mockReturnValue({
+      data: {
+        campaignMessageOverviewDetail: {
+          ...row,
+          status: 'CANCELLED',
+          sentAt: null,
+          eligibleAfter: null,
+        },
+      },
+      loading: false,
+    });
+    render(<SidePanelCampaignMessageOverviewPage />);
+
+    expect(screen.getByText('Not sent')).toBeVisible();
+    expect(screen.queryByText(/Eligible after/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Unavailable/)).not.toBeInTheDocument();
+  });
+
   it('redacts and closes immediately after a workspace switch', async () => {
     workspace = { id: 'other-workspace' };
     render(<SidePanelCampaignMessageOverviewPage />);

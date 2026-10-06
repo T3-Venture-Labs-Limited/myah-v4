@@ -589,6 +589,57 @@ describe('UnipileInstagramProjectionService', () => {
     );
   });
 
+  it.each([
+    { hidden: false, isEvent: true },
+    { hidden: true, isEvent: false },
+  ])(
+    'skips a provider notice %j before locks, persistence, triage or reply handling',
+    async (notice) => {
+      const conversationRecordId = 'bb6b09e6-a71f-43d8-8e3c-39874f2ba54a';
+      const query = jest.fn().mockImplementation(async (sql: string) => {
+        if (sql.includes('myahSocialConversation'))
+          return [{ id: conversationRecordId }];
+        if (sql.includes('INSERT INTO') && sql.includes('myahSocialMessage')) {
+          return [
+            {
+              id: 'b7037d71-3486-4767-80a1-d0f1e3209985',
+              createdAt: new Date(),
+            },
+          ];
+        }
+        return [];
+      });
+      const subject = createProjectionService(query)!;
+      await expect(
+        subject.service.upsertVerifiedMessage({
+          workspace,
+          binding,
+          chat,
+          conversationRecordId,
+          message: {
+            ...inboundMessage,
+            ...notice,
+            text: 'Reacted 👍 to your message',
+          },
+          sourceGenerationId: 'webhook:notice',
+          triageMode: 'LIVE',
+        }),
+      ).resolves.toEqual({ skipped: 'PROVIDER_NOTICE' });
+      expect(query).not.toHaveBeenCalled();
+      expect(subject.withLock).not.toHaveBeenCalled();
+      expect(subject.executeInWorkspaceContext).not.toHaveBeenCalled();
+      expect(
+        subject.myahInboxContactTriageReceiptService.recordInTransaction,
+      ).not.toHaveBeenCalled();
+      expect(
+        subject.myahInboxContactTriageService.ensureSourceContactInTransaction,
+      ).not.toHaveBeenCalled();
+      expect(
+        subject.creatorMessageTrigger.notifyInbound,
+      ).not.toHaveBeenCalled();
+    },
+  );
+
   it('wakes the reply agent for newly inserted live inbound messages only', async () => {
     const conversationRecordId = 'bb6b09e6-a71f-43d8-8e3c-39874f2ba54a';
     let inserted = 0;

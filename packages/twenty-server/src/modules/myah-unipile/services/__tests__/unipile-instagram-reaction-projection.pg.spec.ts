@@ -68,6 +68,16 @@ describePostgres('Instagram reaction projection (dedicated PostgreSQL)', () => {
   let pool: Pool;
   let activeBinding = true;
   let service: UnipileInstagramProjectionService;
+  const creatorMessageTrigger = {
+    notifyInbound: jest.fn().mockResolvedValue(undefined),
+  };
+  const receiptService = {
+    isTriageSchemaProvisioned: jest.fn().mockResolvedValue(true),
+    recordInTransaction: jest.fn().mockResolvedValue(undefined),
+    lockMigrationMarkerForSourcePersistenceInTransaction: jest
+      .fn()
+      .mockResolvedValue(true),
+  };
   const rows = async () => {
     // pi-lens-ignore: sql-injection — schema derives from the fixed test-only workspace UUID.
     const { rows } = await pool.query<{
@@ -111,12 +121,18 @@ describePostgres('Instagram reaction projection (dedicated PostgreSQL)', () => {
     expect(schema).toBe('workspace_1wgvd1injqtife6y4rvfbu3n4');
     await pool.query(`CREATE SCHEMA "workspace_1wgvd1injqtife6y4rvfbu3n4";
       CREATE TABLE "workspace_1wgvd1injqtife6y4rvfbu3n4"."myahSocialConversation" (
-        id uuid PRIMARY KEY, "instagramAccountId" uuid, provider text,
+        id uuid PRIMARY KEY, "creatorId" uuid, "instagramAccountId" uuid, provider text,
         "providerConversationId" text, "recipientIgsid" text, "deletedAt" timestamptz
       );
       CREATE TABLE "workspace_1wgvd1injqtife6y4rvfbu3n4"."myahSocialMessage" (
         id uuid PRIMARY KEY, "conversationId" uuid, provider text,
-        "providerMessageId" text, "deletedAt" timestamptz
+        "providerMessageId" text, "deletedAt" timestamptz,
+        "createdAt" timestamptz DEFAULT now(), "text" text, "direction" text,
+        "sentVia" text, "providerCreatedAt" timestamptz, "deliveryState" text,
+        "deliveryStateUpdatedAt" timestamptz, "hasAttachments" boolean,
+        "attachmentCount" integer, "createdBySource" text, "createdByWorkspaceMemberId" uuid,
+        "createdByName" text, "createdByContext" jsonb, "updatedBySource" text,
+        "updatedByWorkspaceMemberId" uuid, "updatedByName" text, "updatedByContext" jsonb
       );`);
     await new MyahInboxContactTriageSchemaService().ensureReactionTable(
       { query: (sql: string) => pool.query(sql) } as never,
@@ -182,8 +198,13 @@ describePostgres('Instagram reaction projection (dedicated PostgreSQL)', () => {
             }),
           }),
       } as never,
-      {} as never,
-      {} as never,
+      {
+        ensureSourceContactInTransaction: jest
+          .fn()
+          .mockResolvedValue(undefined),
+      } as never,
+      receiptService as never,
+      { get: () => creatorMessageTrigger } as never,
     );
   }, 15000);
 
@@ -198,6 +219,63 @@ describePostgres('Instagram reaction projection (dedicated PostgreSQL)', () => {
       await pool.end();
       jest.useFakeTimers();
     }
+  });
+
+  it('stores one reaction and skips its companion notice without a new message or reply trigger', async () => {
+    expect(await service.applyVerifiedReaction(reaction())).toBe(true);
+    const before = await pool.query(
+      'SELECT count(*)::int AS count FROM "workspace_1wgvd1injqtife6y4rvfbu3n4"."myahSocialMessage"',
+    );
+    await expect(
+      service.upsertVerifiedMessage({
+        workspace,
+        binding,
+        chat,
+        conversationRecordId: conversationId,
+        message: {
+          ...message,
+          messageId: 'companion-notice',
+          senderId: chat.attendeeProviderId,
+          isSender: 0,
+          isEvent: true,
+          hidden: false,
+          text: 'Reacted 👍 to your message',
+        },
+        triageMode: 'LIVE',
+        sourceGenerationId: 'webhook:synthetic-notice',
+      }),
+    ).resolves.toEqual({ skipped: 'PROVIDER_NOTICE' });
+    expect(await rows()).toEqual([
+      expect.objectContaining({ messageRecordId: outboundId, emoji: '👍' }),
+    ]);
+    const after = await pool.query(
+      'SELECT count(*)::int AS count FROM "workspace_1wgvd1injqtife6y4rvfbu3n4"."myahSocialMessage"',
+    );
+    expect(after.rows).toEqual(before.rows);
+    expect(receiptService.recordInTransaction).not.toHaveBeenCalled();
+    expect(creatorMessageTrigger.notifyInbound).not.toHaveBeenCalled();
+    await pool.query(
+      'DELETE FROM "workspace_1wgvd1injqtife6y4rvfbu3n4"."myahInboxInstagramReaction"',
+    );
+  });
+
+  it('a later receipt replaces the emoji even when its hash sorts earlier', async () => {
+    await service.applyVerifiedReaction(reaction({ version: 'f'.repeat(64) }));
+    expect(
+      await service.applyVerifiedReaction(
+        reaction({
+          emoji: '❤',
+          version: '0'.repeat(64),
+          occurredAt: new Date('2026-09-04T12:02:00.000Z'),
+        }),
+      ),
+    ).toBe(true);
+    expect(await rows()).toEqual([
+      expect.objectContaining({ emoji: '❤', version: '0'.repeat(64) }),
+    ]);
+    await pool.query(
+      'DELETE FROM "workspace_1wgvd1injqtife6y4rvfbu3n4"."myahInboxInstagramReaction"',
+    );
   });
 
   it('attaches only to existing inbound/outbound parents and refuses untrusted actors or hidden parents', async () => {

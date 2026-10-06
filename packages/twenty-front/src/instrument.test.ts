@@ -56,6 +56,7 @@ describe('frontend Sentry instrumentation', () => {
         replaysSessionSampleRate: 0.1,
         tracePropagationTargets: ['localhost:3001', 'https://api.example.com'],
         tracesSampleRate: 1,
+        tunnel: 'https://api.example.com/tunnel',
       }),
     );
     expect(mockedSentry.browserTracingIntegration).not.toHaveBeenCalled();

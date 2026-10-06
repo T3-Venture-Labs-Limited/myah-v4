@@ -21,6 +21,7 @@ type WebhookEvent = {
   eventType:
     | 'MESSAGE_RECEIVED'
     | 'MESSAGE_READ'
+    | 'MESSAGE_EDITED'
     | 'MESSAGE_REACTION'
     | 'ACCOUNT_STATUS';
   eventFingerprint?: string;
@@ -248,6 +249,7 @@ describe('UnipileInstagramWebhookJob', () => {
         actorProviderId: event.reactionActorProviderId,
         emoji: '👍',
         version: event.eventFingerprint,
+        occurredAt: event.reactionOccurredAt,
       }),
     );
     expect(harness.projectionService.upsertVerifiedChat).not.toHaveBeenCalled();
@@ -258,6 +260,100 @@ describe('UnipileInstagramWebhookJob', () => {
       expect.objectContaining({ status: 'COMPLETED' }),
     );
   });
+
+  it.each(['MESSAGE_RECEIVED', 'MESSAGE_EDITED', 'MESSAGE_READ'] as const)(
+    'completes a reaction and its %s event notice without message projection',
+    async (eventType) => {
+      const reactionEvent: WebhookEvent = {
+        ...messageEvent,
+        id: 'reaction-event',
+        eventType: 'MESSAGE_REACTION',
+        eventFingerprint: 'a'.repeat(64),
+        reactionValue: '👍',
+        reactionActorProviderId: messageEvent.attendeeProviderId,
+        reactionOccurredAt: new Date('2026-10-05T12:00:00.000Z'),
+      };
+      const noticeEvent: WebhookEvent = {
+        ...messageEvent,
+        id: 'notice-event',
+        eventType,
+        unipileMessageId: 'notice-message',
+        ...(eventType === 'MESSAGE_READ'
+          ? {
+              deliveryState: 'READ' as const,
+              deliveryStateUpdatedAt: new Date('2026-10-05T12:00:00.000Z'),
+            }
+          : {}),
+      };
+      const harness = createHarness(reactionEvent);
+      const events = new Map([
+        [reactionEvent.id, reactionEvent],
+        [noticeEvent.id, noticeEvent],
+      ]);
+      harness.eventRepository.findOne.mockImplementation(async ({ where }) =>
+        events.get(where.id),
+      );
+      harness.eventRepository.save.mockImplementation(async (event) => {
+        events.set(event.id, { ...event });
+        return event;
+      });
+      const parent = {
+        accountId: binding.unipileAccountId,
+        chatId: messageEvent.unipileChatId,
+        messageId: messageEvent.unipileMessageId,
+        senderId: binding.instagramUserId,
+        isSender: 1,
+        hidden: false,
+        deleted: false,
+        isEvent: false,
+        text: 'Synthetic outbound parent',
+        timestamp: '2026-09-04T12:00:00.000Z',
+        hasAttachments: false,
+        attachmentCount: 0,
+        reactions: [
+          {
+            value: '👍',
+            senderId: messageEvent.attendeeProviderId,
+            isSender: false,
+          },
+        ],
+      };
+      harness.client.getMessage
+        .mockResolvedValueOnce(parent)
+        .mockResolvedValueOnce({
+          ...parent,
+          messageId: 'notice-message',
+          senderId: messageEvent.attendeeProviderId,
+          isSender: 0,
+          isEvent: true,
+          text: 'Reacted 👍 to your message',
+          reactions: [],
+        });
+      const job = createJob(harness);
+      await job.handle({ eventId: reactionEvent.id });
+      await job.handle({ eventId: noticeEvent.id });
+      expect(
+        harness.projectionService.applyVerifiedReaction,
+      ).toHaveBeenCalledTimes(1);
+      expect(
+        harness.projectionService.applyVerifiedReaction,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: parent,
+          occurredAt: reactionEvent.reactionOccurredAt,
+        }),
+      );
+      expect(
+        harness.projectionService.upsertVerifiedChat,
+      ).not.toHaveBeenCalled();
+      expect(
+        harness.projectionService.upsertVerifiedMessage,
+      ).not.toHaveBeenCalled();
+      for (const event of events.values()) {
+        expect(event).toMatchObject({ status: 'COMPLETED', failureCode: null });
+      }
+    },
+  );
 
   it.each([binding.instagramUserId, 'unknown-ig'])(
     'rejects an unverified reaction actor %s before projection',

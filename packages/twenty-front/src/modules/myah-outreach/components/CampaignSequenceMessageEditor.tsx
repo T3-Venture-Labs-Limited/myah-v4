@@ -30,6 +30,25 @@ const StyledHint = styled.p`
   margin: 0;
 `;
 
+const StyledField = styled.label`
+  display: flex;
+  flex-direction: column;
+  gap: ${themeCssVariables.spacing[1]};
+
+  textarea {
+    background-color: ${themeCssVariables.background.transparent.lighter};
+    border: 1px solid ${themeCssVariables.border.color.medium};
+    border-radius: ${themeCssVariables.border.radius.md};
+    box-sizing: border-box;
+    color: ${themeCssVariables.font.color.primary};
+    font: inherit;
+    min-height: 160px;
+    padding: ${themeCssVariables.spacing[2]};
+    resize: vertical;
+    width: 100%;
+  }
+`;
+
 const StyledWarning = styled.p`
   color: ${themeCssVariables.color.red};
   margin: 0;
@@ -119,7 +138,7 @@ export const CampaignSequenceMessageEditor = ({
           Plain text, up to 1,000 bytes. Sent from the Campaign&apos;s Instagram
           account. Use {'{{creator.name}}'} to personalize.
         </StyledHint>
-        <label>
+        <StyledField>
           Instagram message
           <textarea
             onFocus={textFieldFocus.onFocus}
@@ -131,7 +150,7 @@ export const CampaignSequenceMessageEditor = ({
             }
             value={message.text}
           />
-        </label>
+        </StyledField>
         <StyledHint>
           {getUtf8ByteLength(message.text.trim())} / 1,000 bytes
         </StyledHint>
