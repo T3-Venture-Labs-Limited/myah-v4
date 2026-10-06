@@ -121,6 +121,7 @@ describe('ManagedProviderBillingModule', () => {
       'engine/core-modules/billing/billing.module.ts',
       'engine/core-modules/managed-email/managed-email.module.ts',
       'engine/core-modules/myah/myah.module.ts',
+      'engine/core-modules/myah-subscription/myah-subscription.module.ts',
       'engine/metadata-modules/ai/ai-models/ai-models.module.ts',
     ]);
     expect(billingImports).not.toEqual(

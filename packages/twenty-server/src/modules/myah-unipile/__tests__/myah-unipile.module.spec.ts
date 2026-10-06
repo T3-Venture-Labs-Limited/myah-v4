@@ -179,7 +179,15 @@ describe('MyahUnipileModule', () => {
         : [],
     );
 
-    expect(importedModules).toEqual(
+    // AuthModule is imported through forwardRef to break an import cycle.
+    const resolvedModules = importedModules.map((importedModule) =>
+      typeof importedModule === 'object' &&
+      importedModule !== null &&
+      'forwardRef' in importedModule
+        ? (importedModule as { forwardRef: () => unknown }).forwardRef()
+        : importedModule,
+    );
+    expect(resolvedModules).toEqual(
       expect.arrayContaining([
         AuthModule,
         PermissionsModule,

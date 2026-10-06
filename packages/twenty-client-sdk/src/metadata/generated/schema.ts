@@ -1084,6 +1084,31 @@ export interface EnterpriseSubscriptionStatusDTO {
     __typename: 'EnterpriseSubscriptionStatusDTO'
 }
 
+export interface MyahCheckoutPrice {
+    amountCents: Scalars['Float']
+    regularAmountCents: Scalars['Float']
+    earlyAccess: Scalars['Boolean']
+    __typename: 'MyahCheckoutPrice'
+}
+
+export interface MyahSubscriptionDetails {
+    amountCents?: Scalars['Float']
+    cancelAtPeriodEnd: Scalars['Boolean']
+    currentPeriodEnd?: Scalars['DateTime']
+    __typename: 'MyahSubscriptionDetails'
+}
+
+export interface MyahWorkspaceUsage {
+    instagramReconnectRequired: Scalars['Boolean']
+    state: Scalars['String']
+    percentUsed?: Scalars['Float']
+    periodStart?: Scalars['DateTime']
+    resetAt?: Scalars['DateTime']
+    paymentRetrying: Scalars['Boolean']
+    exhausted: Scalars['Boolean']
+    __typename: 'MyahWorkspaceUsage'
+}
+
 export interface BillingSubscriptionSchedulePhaseItem {
     price: Scalars['String']
     quantity?: Scalars['Float']
@@ -2656,6 +2681,7 @@ export interface ClientConfigMaintenanceMode {
 }
 
 export interface ClientConfig {
+    isMyahSubscriptionRequired: Scalars['Boolean']
     appVersion?: Scalars['String']
     authProviders: AuthProviders
     billing: Billing
@@ -3372,6 +3398,9 @@ export interface Query {
     enterprisePortalSession?: Scalars['String']
     enterpriseCheckoutSession?: Scalars['String']
     enterpriseSubscriptionStatus?: EnterpriseSubscriptionStatusDTO
+    myahCheckoutPrice: MyahCheckoutPrice
+    myahWorkspaceUsage: MyahWorkspaceUsage
+    myahSubscriptionDetails: MyahSubscriptionDetails
     managedEmailOverview: ManagedEmailOverview
     managedEmailDomains: ManagedEmailDomain[]
     managedEmailMailboxes: ManagedEmailMailbox[]
@@ -3538,6 +3567,9 @@ export interface Mutation {
     uploadWorkspaceMemberProfilePicture: FileWithSignedUrl
     uploadFilesFieldFile: FileWithSignedUrl
     uploadFilesFieldFileByUniversalIdentifier: FileWithSignedUrl
+    createMyahCheckoutSession: Scalars['String']
+    syncMyahCheckoutSession: Scalars['String']
+    createMyahCustomerPortalSession: Scalars['String']
     prepareManagedEmailPaymentMethod: ManagedEmailPaymentSetup
     completeManagedEmailPaymentMethod: ManagedEmailPaymentMethodStatus
     confirmManagedEmailPrewarmedPurchase: ManagedEmailActionResult
@@ -4916,6 +4948,34 @@ export interface EnterpriseSubscriptionStatusDTOGenqlSelection{
     cancelAt?: boolean | number
     currentPeriodEnd?: boolean | number
     isCancellationScheduled?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface MyahCheckoutPriceGenqlSelection{
+    amountCents?: boolean | number
+    regularAmountCents?: boolean | number
+    earlyAccess?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface MyahSubscriptionDetailsGenqlSelection{
+    amountCents?: boolean | number
+    cancelAtPeriodEnd?: boolean | number
+    currentPeriodEnd?: boolean | number
+    __typename?: boolean | number
+    __scalar?: boolean | number
+}
+
+export interface MyahWorkspaceUsageGenqlSelection{
+    instagramReconnectRequired?: boolean | number
+    state?: boolean | number
+    percentUsed?: boolean | number
+    periodStart?: boolean | number
+    resetAt?: boolean | number
+    paymentRetrying?: boolean | number
+    exhausted?: boolean | number
     __typename?: boolean | number
     __scalar?: boolean | number
 }
@@ -6598,6 +6658,7 @@ export interface ClientConfigMaintenanceModeGenqlSelection{
 }
 
 export interface ClientConfigGenqlSelection{
+    isMyahSubscriptionRequired?: boolean | number
     appVersion?: boolean | number
     authProviders?: AuthProvidersGenqlSelection
     billing?: BillingGenqlSelection
@@ -7366,6 +7427,9 @@ export interface QueryGenqlSelection{
     enterprisePortalSession?: { __args: {returnUrlPath?: (Scalars['String'] | null)} } | boolean | number
     enterpriseCheckoutSession?: { __args: {billingInterval?: (Scalars['String'] | null)} } | boolean | number
     enterpriseSubscriptionStatus?: EnterpriseSubscriptionStatusDTOGenqlSelection
+    myahCheckoutPrice?: (MyahCheckoutPriceGenqlSelection & { __args?: {code?: (Scalars['String'] | null)} })
+    myahWorkspaceUsage?: MyahWorkspaceUsageGenqlSelection
+    myahSubscriptionDetails?: MyahSubscriptionDetailsGenqlSelection
     managedEmailOverview?: ManagedEmailOverviewGenqlSelection
     managedEmailDomains?: ManagedEmailDomainGenqlSelection
     managedEmailMailboxes?: ManagedEmailMailboxGenqlSelection
@@ -7607,6 +7671,9 @@ export interface MutationGenqlSelection{
     uploadWorkspaceMemberProfilePicture?: (FileWithSignedUrlGenqlSelection & { __args: {file: Scalars['Upload']} })
     uploadFilesFieldFile?: (FileWithSignedUrlGenqlSelection & { __args: {file: Scalars['Upload'], fieldMetadataId: Scalars['String']} })
     uploadFilesFieldFileByUniversalIdentifier?: (FileWithSignedUrlGenqlSelection & { __args: {file: Scalars['Upload'], fieldMetadataUniversalIdentifier: Scalars['String']} })
+    createMyahCheckoutSession?: { __args: {code?: (Scalars['String'] | null), expectedAmountCents?: (Scalars['Float'] | null)} } | boolean | number
+    syncMyahCheckoutSession?: { __args: {sessionId: Scalars['String']} }
+    createMyahCustomerPortalSession?: boolean | number
     prepareManagedEmailPaymentMethod?: ManagedEmailPaymentSetupGenqlSelection
     completeManagedEmailPaymentMethod?: (ManagedEmailPaymentMethodStatusGenqlSelection & { __args: {input: ManagedEmailCompletePaymentMethodInput} })
     confirmManagedEmailPrewarmedPurchase?: (ManagedEmailActionResultGenqlSelection & { __args: {input: ManagedEmailPurchaseInput} })
@@ -8930,6 +8997,30 @@ export interface LogicFunctionLogsInput {applicationId?: (Scalars['UUID'] | null
     export const isEnterpriseSubscriptionStatusDTO = (obj?: { __typename?: any } | null): obj is EnterpriseSubscriptionStatusDTO => {
       if (!obj?.__typename) throw new Error('__typename is missing in "isEnterpriseSubscriptionStatusDTO"')
       return EnterpriseSubscriptionStatusDTO_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const MyahCheckoutPrice_possibleTypes: string[] = ['MyahCheckoutPrice']
+    export const isMyahCheckoutPrice = (obj?: { __typename?: any } | null): obj is MyahCheckoutPrice => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isMyahCheckoutPrice"')
+      return MyahCheckoutPrice_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const MyahSubscriptionDetails_possibleTypes: string[] = ['MyahSubscriptionDetails']
+    export const isMyahSubscriptionDetails = (obj?: { __typename?: any } | null): obj is MyahSubscriptionDetails => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isMyahSubscriptionDetails"')
+      return MyahSubscriptionDetails_possibleTypes.includes(obj.__typename)
+    }
+
+
+
+    const MyahWorkspaceUsage_possibleTypes: string[] = ['MyahWorkspaceUsage']
+    export const isMyahWorkspaceUsage = (obj?: { __typename?: any } | null): obj is MyahWorkspaceUsage => {
+      if (!obj?.__typename) throw new Error('__typename is missing in "isMyahWorkspaceUsage"')
+      return MyahWorkspaceUsage_possibleTypes.includes(obj.__typename)
     }
 
 

@@ -1429,6 +1429,28 @@ type EnterpriseSubscriptionStatusDTO {
   isCancellationScheduled: Boolean!
 }
 
+type MyahCheckoutPrice {
+  amountCents: Float!
+  regularAmountCents: Float!
+  earlyAccess: Boolean!
+}
+
+type MyahSubscriptionDetails {
+  amountCents: Float
+  cancelAtPeriodEnd: Boolean!
+  currentPeriodEnd: DateTime
+}
+
+type MyahWorkspaceUsage {
+  instagramReconnectRequired: Boolean!
+  state: String!
+  percentUsed: Float
+  periodStart: DateTime
+  resetAt: DateTime
+  paymentRetrying: Boolean!
+  exhausted: Boolean!
+}
+
 type BillingSubscriptionSchedulePhaseItem {
   price: String!
   quantity: Float
@@ -2973,6 +2995,7 @@ type ClientConfigMaintenanceMode {
 }
 
 type ClientConfig {
+  isMyahSubscriptionRequired: Boolean!
   appVersion: String
   authProviders: AuthProviders!
   billing: Billing!
@@ -3696,6 +3719,9 @@ type Query {
   enterprisePortalSession(returnUrlPath: String): String
   enterpriseCheckoutSession(billingInterval: String): String
   enterpriseSubscriptionStatus: EnterpriseSubscriptionStatusDTO
+  myahCheckoutPrice(code: String): MyahCheckoutPrice!
+  myahWorkspaceUsage: MyahWorkspaceUsage!
+  myahSubscriptionDetails: MyahSubscriptionDetails!
   managedEmailOverview: ManagedEmailOverview!
   managedEmailDomains: [ManagedEmailDomain!]!
   managedEmailMailboxes: [ManagedEmailMailbox!]!
@@ -4070,6 +4096,9 @@ type Mutation {
   uploadWorkspaceMemberProfilePicture(file: Upload!): FileWithSignedUrl!
   uploadFilesFieldFile(file: Upload!, fieldMetadataId: String!): FileWithSignedUrl!
   uploadFilesFieldFileByUniversalIdentifier(file: Upload!, fieldMetadataUniversalIdentifier: String!): FileWithSignedUrl!
+  createMyahCheckoutSession(code: String, expectedAmountCents: Float): String!
+  syncMyahCheckoutSession(sessionId: String!): String!
+  createMyahCustomerPortalSession: String!
   prepareManagedEmailPaymentMethod: ManagedEmailPaymentSetup!
   completeManagedEmailPaymentMethod(input: ManagedEmailCompletePaymentMethodInput!): ManagedEmailPaymentMethodStatus!
   confirmManagedEmailPrewarmedPurchase(input: ManagedEmailPurchaseInput!): ManagedEmailActionResult!
