@@ -1,4 +1,9 @@
 import { type UIMessageChunk } from 'ai';
+import {
+  ManagedProviderBillingException,
+  ManagedProviderBillingExceptionCode,
+} from 'src/engine/core-modules/managed-provider-billing/managed-provider-billing.exception';
+import { AgentChatStreamingService } from 'src/engine/metadata-modules/ai/ai-chat/services/agent-chat-streaming.service';
 
 import { type WorkspaceEntity } from 'src/engine/core-modules/workspace/workspace.entity';
 import { StreamAgentChatJob } from 'src/engine/metadata-modules/ai/ai-chat/jobs/stream-agent-chat.job';
@@ -178,6 +183,7 @@ describe('StreamAgentChatJob', () => {
       startRunning: jest.fn().mockReturnValue(() => {}),
       markClaimed: jest.fn().mockResolvedValue(undefined),
       clear: jest.fn().mockResolvedValue(undefined),
+      isAlive: jest.fn().mockResolvedValue(false),
     };
     const job = new StreamAgentChatJob(
       threadRepository as never,
@@ -199,8 +205,66 @@ describe('StreamAgentChatJob', () => {
       chatExecutionService,
       agentChatStreamingService,
       cancelCallbacks,
+      streamHeartbeatService,
     };
   };
+
+  it.each([false, true])(
+    'keeps the usage error during heartbeat cleanup (stale catchup read: %s)',
+    async (staleRead) => {
+      const exhausted = new ManagedProviderBillingException(
+        ManagedProviderBillingExceptionCode.INSUFFICIENT_PREPAID_BALANCE,
+      );
+      const {
+        job,
+        threadRepository,
+        streamHeartbeatService,
+        eventPublisherService,
+      } = buildJob({ streamChatRejection: exhausted });
+      const thread = {
+        id: jobData.threadId,
+        activeStreamId: jobData.streamId as string | null,
+        lastStreamError: null as unknown,
+      };
+      threadRepository.update.mockImplementation(
+        async (_workspaceId, criteria, values) => {
+          if (
+            criteria.activeStreamId &&
+            criteria.activeStreamId !== thread.activeStreamId
+          )
+            return { affected: 0 };
+          if ('activeStreamId' in values)
+            thread.activeStreamId = values.activeStreamId;
+          if ('lastStreamError' in values)
+            thread.lastStreamError = values.lastStreamError;
+          return { affected: 1 };
+        },
+      );
+      const reaper = new AgentChatStreamingService(
+        threadRepository as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        eventPublisherService as never,
+        {} as never,
+        streamHeartbeatService as never,
+      );
+      const catchupThread = staleRead ? { ...thread } : thread;
+      streamHeartbeatService.clear.mockImplementation(async () => {
+        await reaper.reapDeadStream({
+          thread: catchupThread,
+          workspaceId: jobData.workspaceId,
+        });
+      });
+
+      await expect(job.handle(jobData)).rejects.toBe(exhausted);
+      expect(thread.activeStreamId).toBeNull();
+      expect(thread.lastStreamError).toMatchObject({
+        code: ManagedProviderBillingExceptionCode.INSUFFICIENT_PREPAID_BALANCE,
+        message: 'Your AI usage is used up.',
+      });
+    },
+  );
 
   it('publishes all chunks in order with message-persisted last on success', async () => {
     const {

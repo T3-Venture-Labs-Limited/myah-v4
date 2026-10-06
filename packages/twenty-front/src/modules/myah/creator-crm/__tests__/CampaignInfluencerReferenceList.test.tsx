@@ -220,6 +220,32 @@ it('uses a valid match-nothing filter when no influencers have the selected stat
   expect(screen.getByText('No influencers match this status.')).toBeVisible();
 });
 
+it('shows why the reply agent needs help without hiding the usage reason in a tooltip', () => {
+  mockAgentReviewQuery.mockReturnValue({
+    data: {
+      myahReplyAgentReview: {
+        needReviewCount: 1,
+        nodes: [
+          {
+            campaignCreatorId: 'membership-1',
+            creatorId: 'creator-1',
+            nextAction: 'NEEDS_YOU',
+            reason:
+              'Your AI usage is used up. Review Billing, then regenerate, or reply yourself.',
+          },
+        ],
+      },
+    },
+    refetch: mockAgentReviewRefetch,
+  } as never);
+  setup();
+  expect(
+    screen.getByText(
+      'Needs you · Your AI usage is used up. Review Billing, then regenerate, or reply yourself.',
+    ),
+  ).toBeVisible();
+});
+
 it('shows the agent next action and filters to influencers that need review', () => {
   mockAgentReviewQuery.mockReturnValue({
     data: {
