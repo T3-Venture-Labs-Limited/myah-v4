@@ -670,6 +670,57 @@ describe('MyahInboxContactQueryService', () => {
     expect(creatorContact.id).not.toContain(creatorId);
   });
 
+  it.each([
+    ['capability denied', false, 'ACCESS_RESTRICTED', false],
+    ['migration not ready', true, 'NOT_INITIALIZED', false],
+    ['tuple missing', true, 'NOT_INITIALIZED', false],
+    ['available', true, null, true],
+  ] as const)(
+    'projects triage reason when %s without exposing unavailable values',
+    async (_case, capability, reason, isAvailable) => {
+      const harness = buildHarness(
+        [
+          {
+            ...rawRows[0],
+            triageIsAvailable: isAvailable,
+            triageUnavailableReason: reason,
+            triageInboxOwnerId: isAvailable ? workspaceMemberId : null,
+            triageInboxState: isAvailable ? 'NEEDS_REPLY' : null,
+            triageSnoozedUntil: null,
+            triageRevision: isAvailable ? 4 : null,
+            triageIdentityGeneration: isAvailable ? '2' : null,
+          },
+        ],
+        capability,
+      );
+      const result = await harness.service.listContacts(request());
+      expect(result).toMatchObject({
+        edges: [
+          {
+            node: {
+              triage: {
+                isAvailable,
+                unavailableReason: reason,
+                inboxOwnerId: isAvailable ? workspaceMemberId : null,
+                inboxState: isAvailable ? 'NEEDS_REPLY' : null,
+                revision: isAvailable ? 4 : null,
+                identityGeneration: isAvailable ? '2' : null,
+              },
+            },
+          },
+        ],
+      });
+      const [sql] = harness.query.mock.calls[0];
+      expect(sql).toContain(
+        `WHEN NOT (${capability ? 'triage_capability."isAvailable"' : 'FALSE'}) THEN 'ACCESS_RESTRICTED'`,
+      );
+      expect(sql).toContain(
+        "WHEN migration.status IS DISTINCT FROM 'READY' OR triage.revision IS NULL THEN 'NOT_INITIALIZED'",
+      );
+      expect(sql).toContain('latest."triageUnavailableReason"');
+    },
+  );
+
   it('projects a display handle only from one permission-readable active Instagram profile after contact paging', async () => {
     const harness = buildHarness([{ ...rawRows[0], totalCount: '3' }]);
     const result = await harness.service.listContacts(request({ first: 1 }));

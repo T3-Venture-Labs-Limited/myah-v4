@@ -13,6 +13,9 @@ import { MyahInboxContactTriageLifecycleService } from 'src/engine/core-modules/
 import { MyahInboxContactTriageReceiptService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-receipt.service';
 import { MyahInboxContactTriageSchemaService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage-schema.service';
 import { MyahInboxContactTriageService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-contact-triage.service';
+import { MyahInboxTriageCapabilityService } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-triage-capability.service';
+import { ConnectedAccountMetadataService } from 'src/engine/metadata-modules/connected-account/connected-account-metadata.service';
+import { type UserWorkspaceAuthContext } from 'src/engine/core-modules/auth/types/workspace-auth-context.type';
 import { encodeMyahInboxContactId } from 'src/engine/core-modules/myah-inbox/utils/myah-inbox-contact-id.util';
 import { normalizeReadCapabilitySql } from 'src/engine/core-modules/myah-inbox/services/myah-inbox-triage-capability.service';
 import { getWorkspaceSchemaName } from 'src/engine/workspace-datasource/utils/get-workspace-schema-name.util';
@@ -91,6 +94,7 @@ const contactsQuery = gql`
           }
           triage {
             isAvailable
+            unavailableReason
             inboxOwnerId
             inboxState
             snoozedUntil
@@ -460,6 +464,66 @@ const applyInboundReceipt = async ({
       manager,
     );
   });
+};
+
+const assertJaneTriageRead = async (): Promise<void> => {
+  const orm = resolveProviderByName<GlobalWorkspaceOrmManager>(
+    'GlobalWorkspaceOrmManager',
+  );
+  const capability = resolveProviderByName<MyahInboxTriageCapabilityService>(
+    'MyahInboxTriageCapabilityService',
+  );
+  const [jane] = await global.testDataSource.query(
+    `SELECT "userId" FROM core."userWorkspace" WHERE id=$1 AND "workspaceId"=$2`,
+    [USER_WORKSPACE_DATA_SEED_IDS.JANE, workspaceId],
+  );
+  const [member] = await global.testDataSource.query(
+    `SELECT id FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."workspaceMember" WHERE "userId"=$1`,
+    [jane.userId],
+  );
+  const authContext = {
+    type: 'user',
+    workspace: { id: workspaceId },
+    userWorkspaceId: USER_WORKSPACE_DATA_SEED_IDS.JANE,
+    user: { id: jane.userId },
+    workspaceMemberId: member.id,
+    workspaceMember: { id: member.id },
+  } as UserWorkspaceAuthContext;
+
+  await orm.executeInWorkspaceContext(
+    () => capability.assertRead({ authContext }),
+    authContext,
+  );
+};
+
+const createDisposableEmailChannel = async (): Promise<{
+  accountId: string;
+  channelId: string;
+}> => {
+  const accountId = randomUUID();
+  const channelId = randomUUID();
+  await global.testDataSource.query(
+    `INSERT INTO core."connectedAccount" (id, "workspaceId", handle, provider, "userWorkspaceId")
+     VALUES ($1, $2, $3, 'google', $4)`,
+    [
+      accountId,
+      workspaceId,
+      `myah433-${accountId}@example.test`,
+      USER_WORKSPACE_DATA_SEED_IDS.JANE,
+    ],
+  );
+  await global.testDataSource.query(
+    `INSERT INTO core."messageChannel"
+       (id, "workspaceId", "connectedAccountId", handle, type, visibility,
+        "pendingGroupEmailsAction", "syncStage")
+     SELECT $1, "workspaceId", $2, $3, type, 'SHARE_EVERYTHING',
+            "pendingGroupEmailsAction", "syncStage"
+     FROM core."messageChannel" WHERE "workspaceId"=$4 AND type::text='EMAIL'
+     ORDER BY id LIMIT 1`,
+    [channelId, accountId, `myah433-${channelId}@example.test`, workspaceId],
+  );
+
+  return { accountId, channelId };
 };
 
 const recordFixtureEmailEvidence = async ({
@@ -1908,6 +1972,423 @@ describe('Myah Inbox contact triage lifecycle (PostgreSQL)', () => {
         }),
       ]),
     );
+  });
+
+  it('distinguishes a missing tuple from an available contact without exposing missing values', async () => {
+    const initialized = await seedFixture();
+    try {
+      await applyInboundReceipt({ fixture: initialized });
+      const getTriage = async (threadId: string) => {
+        const response = await makeGraphqlAPIRequest(
+          {
+            query: contactsQuery,
+            variables: {
+              first: 20,
+              contactId: exactContactId('email-thread', threadId),
+            },
+          },
+          APPLE_JANE_ADMIN_ACCESS_TOKEN,
+        );
+        expect(response.body.errors).toBeUndefined();
+        return response.body.data.myahInboxContacts.edges[0].node.triage;
+      };
+      expect(await getTriage(fixture.threadId)).toEqual({
+        isAvailable: false,
+        unavailableReason: 'NOT_INITIALIZED',
+        inboxOwnerId: null,
+        inboxState: null,
+        snoozedUntil: null,
+        revision: null,
+        identityGeneration: null,
+      });
+      expect(await getTriage(initialized.threadId)).toEqual(
+        expect.objectContaining({
+          isAvailable: true,
+          unavailableReason: null,
+          inboxState: 'NEEDS_REPLY',
+        }),
+      );
+    } finally {
+      await cleanupFixture(initialized);
+    }
+  });
+
+  it('reports NOT_INITIALIZED with every triage value masked while the workspace triage marker is not READY', async () => {
+    const initialized = await seedFixture();
+    const setMarker = (status: 'MIGRATING' | 'READY') =>
+      global.testDataSource.query(
+        `UPDATE "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahInboxTriageMigration" SET status=$1`,
+        [status],
+      );
+    const getTriage = async () => {
+      const response = await makeGraphqlAPIRequest(
+        {
+          query: contactsQuery,
+          variables: {
+            first: 20,
+            contactId: exactContactId('email-thread', initialized.threadId),
+          },
+        },
+        APPLE_JANE_ADMIN_ACCESS_TOKEN,
+      );
+      expect(response.body.errors).toBeUndefined();
+
+      return response.body.data.myahInboxContacts.edges[0].node.triage;
+    };
+    try {
+      await applyInboundReceipt({ fixture: initialized });
+      expect(await getTriage()).toEqual(
+        expect.objectContaining({ isAvailable: true, unavailableReason: null }),
+      );
+      await setMarker('MIGRATING');
+      try {
+        // The tuple exists, but a non-READY marker makes it non-canonical.
+        expect(await getTriage()).toEqual({
+          isAvailable: false,
+          unavailableReason: 'NOT_INITIALIZED',
+          inboxOwnerId: null,
+          inboxState: null,
+          snoozedUntil: null,
+          revision: null,
+          identityGeneration: null,
+        });
+      } finally {
+        await setMarker('READY');
+      }
+      expect(await getTriage()).toEqual(
+        expect.objectContaining({ isAvailable: true, unavailableReason: null }),
+      );
+    } finally {
+      await cleanupFixture(initialized);
+    }
+  });
+
+  it('classifies private Email denial before tuple existence and masks all triage values', async () => {
+    const [channel] = await global.testDataSource.query(
+      `SELECT channel.id, channel.visibility, channel."connectedAccountId"
+       FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."messageChannelMessageAssociation" association
+       JOIN core."messageChannel" channel ON channel.id=association."messageChannelId"
+       WHERE association.id=$1`,
+      [fixture.associationId],
+    );
+    const [otherAccount] = await global.testDataSource.query(
+      `SELECT id FROM core."connectedAccount" WHERE "workspaceId"=$1 AND "userWorkspaceId"=$2 LIMIT 1`,
+      [workspaceId, USER_WORKSPACE_DATA_SEED_IDS.TIM],
+    );
+    expect(otherAccount).toBeDefined();
+    try {
+      await global.testDataSource.query(
+        `UPDATE core."messageChannel" SET visibility='METADATA', "connectedAccountId"=$2 WHERE id=$1`,
+        [channel.id, otherAccount.id],
+      );
+      const response = await makeGraphqlAPIRequest(
+        {
+          query: contactsQuery,
+          variables: {
+            first: 20,
+            contactId: exactContactId('email-thread', fixture.threadId),
+          },
+        },
+        APPLE_JANE_ADMIN_ACCESS_TOKEN,
+      );
+      expect(response.body.errors).toBeUndefined();
+      expect(response.body.data.myahInboxContacts.edges[0].node.triage).toEqual(
+        {
+          isAvailable: false,
+          unavailableReason: 'ACCESS_RESTRICTED',
+          inboxOwnerId: null,
+          inboxState: null,
+          snoozedUntil: null,
+          revision: null,
+          identityGeneration: null,
+        },
+      );
+    } finally {
+      await global.testDataSource.query(
+        `UPDATE core."messageChannel" SET visibility=$2, "connectedAccountId"=$3 WHERE id=$1`,
+        [channel.id, channel.visibility, channel.connectedAccountId],
+      );
+    }
+  });
+
+  it.each(['deleted-only', 'empty'] as const)(
+    'allows capability read for %s Email provenance on PostgreSQL',
+    async (kind) => {
+      await expect(assertJaneTriageRead()).resolves.toBeUndefined();
+      const persistedMessageId = randomUUID();
+      const messageChannelIds = kind === 'empty' ? [] : [randomUUID()];
+      await global.testDataSource.query(
+        `INSERT INTO "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahInboxTriageEmailChannelProvenance"
+         ("persistedMessageId", "messageChannelIds") VALUES ($1, $2::uuid[])`,
+        [persistedMessageId, messageChannelIds],
+      );
+      try {
+        await expect(assertJaneTriageRead()).resolves.toBeUndefined();
+      } finally {
+        await global.testDataSource.query(
+          `DELETE FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahInboxTriageEmailChannelProvenance"
+           WHERE "persistedMessageId"=$1`,
+          [persistedMessageId],
+        );
+      }
+    },
+  );
+
+  it.each(['association', 'provenance'] as const)(
+    'denies triage for a live private Email channel with unknown owner in %s',
+    async (source) => {
+      await expect(assertJaneTriageRead()).resolves.toBeUndefined();
+      const { accountId, channelId } = await createDisposableEmailChannel();
+      const foreignAccountId = randomUUID();
+      const privateFixture = await seedFixture();
+      const queryTriage = async () => {
+        const response = await makeGraphqlAPIRequest(
+          {
+            query: contactsQuery,
+            variables: {
+              first: 20,
+              contactId: exactContactId('email-thread', fixture.threadId),
+            },
+          },
+          APPLE_JANE_ADMIN_ACCESS_TOKEN,
+        );
+        expect(response.body.errors).toBeUndefined();
+
+        return response.body.data.myahInboxContacts.edges[0].node.triage;
+      };
+      try {
+        // Initialize the queried contact first, so a later denial can only come
+        // from the live private channel and not from a missing tuple.
+        await applyInboundReceipt({ fixture });
+        expect(await queryTriage()).toEqual(
+          expect.objectContaining({
+            isAvailable: true,
+            unavailableReason: null,
+          }),
+        );
+        // The channel belongs to this workspace, but its account belongs to
+        // another: the workspace-scoped owner lookup must fail closed.
+        await global.testDataSource.query(
+          `INSERT INTO core."connectedAccount" (id, "workspaceId", handle, provider, "userWorkspaceId")
+           SELECT $1, id, $2, 'google', $3 FROM core.workspace WHERE id <> $4 LIMIT 1`,
+          [
+            foreignAccountId,
+            `myah433-${foreignAccountId}@example.test`,
+            USER_WORKSPACE_DATA_SEED_IDS.JANE,
+            workspaceId,
+          ],
+        );
+        await global.testDataSource.query(
+          `UPDATE core."messageChannel" SET visibility='METADATA', "connectedAccountId"=$2 WHERE id=$1`,
+          [channelId, foreignAccountId],
+        );
+        await global.testDataSource.query(
+          `UPDATE "workspace_1wgvd1injqtife6y4rvfbu3h5"."messageChannelMessageAssociation"
+           SET "messageChannelId"=$2 WHERE id=$1`,
+          [privateFixture.associationId, channelId],
+        );
+        if (source === 'provenance') {
+          await recordFixtureEmailEvidence({
+            fixture: privateFixture,
+            firstPersistence: false,
+          });
+          await global.testDataSource.query(
+            `DELETE FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."messageChannelMessageAssociation" WHERE "messageId"=$1`,
+            [privateFixture.messageId],
+          );
+          await global.testDataSource.query(
+            `DELETE FROM "workspace_1wgvd1injqtife6y4rvfbu3h5".message WHERE id=$1`,
+            [privateFixture.messageId],
+          );
+        }
+        await expect(assertJaneTriageRead()).rejects.toMatchObject({
+          status: 403,
+        });
+        const capability =
+          resolveProviderByName<MyahInboxTriageCapabilityService>(
+            'MyahInboxTriageCapabilityService',
+          );
+        const precheck = jest
+          .spyOn(capability, 'assertRead')
+          .mockResolvedValue(undefined);
+        try {
+          expect(await queryTriage()).toEqual({
+            isAvailable: false,
+            unavailableReason: 'ACCESS_RESTRICTED',
+            inboxOwnerId: null,
+            inboxState: null,
+            snoozedUntil: null,
+            revision: null,
+            identityGeneration: null,
+          });
+        } finally {
+          precheck.mockRestore();
+        }
+      } finally {
+        await cleanupFixture(privateFixture);
+        await global.testDataSource.query(
+          `DELETE FROM core."messageChannel" WHERE id=$1`,
+          [channelId],
+        );
+        await global.testDataSource.query(
+          `DELETE FROM core."connectedAccount" WHERE id = ANY($1::uuid[])`,
+          [[accountId, foreignAccountId]],
+        );
+      }
+    },
+  );
+
+  it('keeps triage list and mutation available after deleting the imported shared Email account', async () => {
+    const { accountId, channelId } = await createDisposableEmailChannel();
+    const disconnected = await seedFixture();
+    try {
+      await global.testDataSource.query(
+        `UPDATE "workspace_1wgvd1injqtife6y4rvfbu3h5"."messageChannelMessageAssociation"
+         SET "messageChannelId"=$2 WHERE id=$1`,
+        [disconnected.associationId, channelId],
+      );
+      await recordFixtureEmailEvidence({
+        fixture: disconnected,
+        firstPersistence: false,
+      });
+      await applyInboundReceipt({ fixture });
+      const before = await makeGraphqlAPIRequest(
+        {
+          query: contactsQuery,
+          variables: {
+            contactId: exactContactId('email-thread', fixture.threadId),
+            first: 20,
+          },
+        },
+        APPLE_JANE_ADMIN_ACCESS_TOKEN,
+      );
+      expect(before.body.errors).toBeUndefined();
+      const contact = before.body.data.myahInboxContacts.edges[0].node;
+      expect(contact.triage.isAvailable).toBe(true);
+
+      await resolveProviderByName<ConnectedAccountMetadataService>(
+        'ConnectedAccountMetadataService',
+      ).delete({ id: accountId, workspaceId });
+      const [provenance] = await global.testDataSource.query(
+        `SELECT "messageChannelIds" FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahInboxTriageEmailChannelProvenance"
+         WHERE "persistedMessageId"=$1`,
+        [disconnected.messageId],
+      );
+      const liveChannels = await global.testDataSource.query(
+        `SELECT id FROM core."messageChannel" WHERE id=$1`,
+        [channelId],
+      );
+      expect(provenance.messageChannelIds).toContain(channelId);
+      expect(liveChannels).toEqual([]);
+
+      const after = await makeGraphqlAPIRequest(
+        {
+          query: contactsQuery,
+          variables: {
+            contactId: contact.id,
+            first: 20,
+          },
+        },
+        APPLE_JANE_ADMIN_ACCESS_TOKEN,
+      );
+      expect(after.body.errors).toBeUndefined();
+      expect(after.body.data.myahInboxContacts.edges).toHaveLength(1);
+      const mutation = await makeGraphqlAPIRequest(
+        {
+          query: updateTriageMutation,
+          variables: {
+            input: {
+              expectedWorkspaceId: workspaceId,
+              contactId: contact.id,
+              expectedRevision: contact.triage.revision,
+              expectedIdentityGeneration: contact.triage.identityGeneration,
+              inboxState: 'CLOSED',
+            },
+          },
+        },
+        APPLE_JANE_ADMIN_ACCESS_TOKEN,
+      );
+      expect({
+        listAvailable:
+          after.body.data.myahInboxContacts.edges[0].node.triage.isAvailable,
+        mutationErrors: mutation.body.errors,
+        mutationState:
+          mutation.body.data?.updateMyahInboxContactTriage?.inboxState,
+      }).toEqual({
+        listAvailable: true,
+        mutationErrors: undefined,
+        mutationState: 'CLOSED',
+      });
+    } finally {
+      await cleanupFixture(disconnected);
+      await global.testDataSource.query(
+        `DELETE FROM core."connectedAccount" WHERE id=$1 AND "workspaceId"=$2`,
+        [accountId, workspaceId],
+      );
+    }
+  });
+
+  it('keeps deleted-plus-live-private provenance hidden from another member', async () => {
+    const { accountId, channelId } = await createDisposableEmailChannel();
+    // An isolated private channel, so no other live message can make the
+    // capability fail: only the retained provenance entry can deny here.
+    const { accountId: privateAccountId, channelId: privateChannelId } =
+      await createDisposableEmailChannel();
+    const privateChannel = { id: privateChannelId };
+    try {
+      await expect(assertJaneTriageRead()).resolves.toBeUndefined();
+      await global.testDataSource.query(
+        `UPDATE "workspace_1wgvd1injqtife6y4rvfbu3h5"."messageChannelMessageAssociation"
+         SET "messageChannelId"=$2 WHERE id=$1`,
+        [fixture.associationId, channelId],
+      );
+      await recordFixtureEmailEvidence({ fixture, firstPersistence: false });
+      await global.testDataSource.query(
+        `UPDATE core."messageChannel" SET visibility='METADATA' WHERE id=$1`,
+        [privateChannel.id],
+      );
+      await global.testDataSource.query(
+        `UPDATE core."connectedAccount" SET "userWorkspaceId"=$2 WHERE id=$1`,
+        [privateAccountId, USER_WORKSPACE_DATA_SEED_IDS.TIM],
+      );
+      await addFixtureEmailAssociation({
+        fixture,
+        messageChannelId: privateChannel.id,
+      });
+      await recordFixtureEmailEvidence({ fixture, firstPersistence: false });
+      await resolveProviderByName<ConnectedAccountMetadataService>(
+        'ConnectedAccountMetadataService',
+      ).delete({ id: accountId, workspaceId });
+      const [provenance] = await global.testDataSource.query(
+        `SELECT "messageChannelIds" FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."myahInboxTriageEmailChannelProvenance"
+         WHERE "persistedMessageId"=$1`,
+        [fixture.messageId],
+      );
+      expect(provenance.messageChannelIds).toEqual(
+        expect.arrayContaining([channelId, privateChannel.id]),
+      );
+      await global.testDataSource.query(
+        `DELETE FROM "workspace_1wgvd1injqtife6y4rvfbu3h5"."messageChannelMessageAssociation"
+         WHERE "messageId"=$1`,
+        [fixture.messageId],
+      );
+      await global.testDataSource.query(
+        `DELETE FROM "workspace_1wgvd1injqtife6y4rvfbu3h5".message WHERE id=$1`,
+        [fixture.messageId],
+      );
+      await expect(assertJaneTriageRead()).rejects.toMatchObject({
+        status: 403,
+      });
+    } finally {
+      await global.testDataSource.query(
+        `DELETE FROM core."messageChannel" WHERE id=$1`,
+        [privateChannel.id],
+      );
+      await global.testDataSource.query(
+        `DELETE FROM core."connectedAccount" WHERE id = ANY($1::uuid[]) AND "workspaceId"=$2`,
+        [[accountId, privateAccountId], workspaceId],
+      );
+    }
   });
 
   it('fails closed over HTTP when unrestricted object reads include another user’s private Email mailbox', async () => {

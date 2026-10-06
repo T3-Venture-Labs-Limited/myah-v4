@@ -159,6 +159,7 @@ const contact = (isAvailable = true): MyahInboxContact => ({
   needsAttention: true,
   triage: {
     isAvailable,
+    unavailableReason: isAvailable ? null : 'ACCESS_RESTRICTED',
     inboxOwnerId: 'member-1',
     inboxState: 'NEEDS_REPLY',
     snoozedUntil: null,
@@ -338,22 +339,106 @@ describe('MyahInboxContactTriageActions', () => {
       ),
     ).toBeVisible();
     expect(mockUpdateTriage).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'This contact changed.',
+    );
   });
 
-  it('uses the generic unavailable message for every unavailable contact', () => {
-    render(
+  it.each(['NOT_INITIALIZED', 'INCOMPLETE', 'ACCESS_RESTRICTED'] as const)(
+    'keeps a rejected-update alert when refreshed triage is %s',
+    async (state) => {
+      mockUpdateTriage.mockRejectedValue(new Error('Triage update failed.'));
+      const { rerender } = render(
+        <MyahInboxContactTriageActions
+          contact={contact()}
+          onUpdated={jest.fn()}
+        />,
+      );
+
+      fireEvent.change(screen.getByRole('combobox', { name: 'State' }), {
+        target: { value: 'CLOSED' },
+      });
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Triage update failed.',
+      );
+
+      const refreshed = contact();
+      refreshed.triage.revision = null;
+      if (state !== 'INCOMPLETE') {
+        refreshed.triage.isAvailable = false;
+        refreshed.triage.unavailableReason = state;
+      }
+      rerender(
+        <MyahInboxContactTriageActions
+          contact={refreshed}
+          onUpdated={jest.fn()}
+        />,
+      );
+
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Triage update failed.',
+      );
+      expect(
+        screen.queryByRole('group', { name: 'Contact triage' }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    },
+  );
+
+  it('renders nothing for ACCESS_RESTRICTED without a failed-action alert', () => {
+    const { container } = render(
       <MyahInboxContactTriageActions
         contact={contact(false)}
         onUpdated={jest.fn()}
       />,
     );
 
-    expect(
-      screen.getByText('Triage is unavailable with your current Inbox access.'),
-    ).toBeVisible();
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('group', { name: 'Contact triage' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('renders nothing without a workspace even for restricted triage', () => {
+    getDefaultStore().set(currentWorkspaceState.atom, null);
+    const { container } = render(
+      <MyahInboxContactTriageActions
+        contact={contact(false)}
+        onUpdated={jest.fn()}
+      />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('renders nothing for NOT_INITIALIZED while keeping controls hidden', () => {
+    const { container } = render(
+      <MyahInboxContactTriageActions
+        contact={{
+          ...contact(false),
+          triage: {
+            ...contact(false).triage,
+            unavailableReason: 'NOT_INITIALIZED',
+          },
+        }}
+        onUpdated={jest.fn()}
+      />,
+    );
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('renders nothing for incomplete available triage', () => {
+    const { container } = render(
+      <MyahInboxContactTriageActions
+        contact={{
+          ...contact(),
+          triage: { ...contact().triage, revision: null },
+        }}
+        onUpdated={jest.fn()}
+      />,
+    );
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('refreshes long snoozes only after their deadline', () => {

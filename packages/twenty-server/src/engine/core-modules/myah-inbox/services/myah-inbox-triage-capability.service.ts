@@ -203,13 +203,16 @@ export class MyahInboxTriageCapabilityService {
          GROUP BY association."messageId"
          HAVING NOT BOOL_OR(
            channel.visibility = $3
-           OR connected_account."userWorkspaceId" = $4
+           OR COALESCE(connected_account."userWorkspaceId" = $4, FALSE)
          )
        ) OR EXISTS (
          SELECT 1
          FROM "${getWorkspaceSchemaName(authContext.workspace.id)}"."myahInboxTriageEmailChannelProvenance" provenance
-         WHERE NOT EXISTS (
-           SELECT 1
+         CROSS JOIN LATERAL (
+           SELECT BOOL_OR(
+             channel.visibility = $3
+             OR COALESCE(connected_account."userWorkspaceId" = $4, FALSE)
+           ) AS visible
            FROM unnest(provenance."messageChannelIds") AS channel_id(id)
            INNER JOIN core."messageChannel" channel
              ON channel.id = channel_id.id
@@ -217,9 +220,8 @@ export class MyahInboxTriageCapabilityService {
            LEFT JOIN core."connectedAccount" connected_account
              ON connected_account.id = channel."connectedAccountId"
             AND connected_account."workspaceId" = $1
-           WHERE channel.visibility = $3
-              OR connected_account."userWorkspaceId" = $4
-         )
+         ) live
+         WHERE live.visible IS FALSE
        ) AS "hasHiddenParticipatingEmail"`,
       [
         authContext.workspace.id,

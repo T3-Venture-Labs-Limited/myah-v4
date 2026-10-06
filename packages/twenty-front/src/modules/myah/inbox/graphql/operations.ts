@@ -145,6 +145,7 @@ const MYAH_INBOX_CONTACT_FIELDS = gql`
     needsAttention
     triage {
       isAvailable
+      unavailableReason
       inboxOwnerId
       inboxState
       snoozedUntil
