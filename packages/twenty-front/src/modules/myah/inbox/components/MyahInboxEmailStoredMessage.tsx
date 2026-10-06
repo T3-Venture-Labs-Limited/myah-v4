@@ -4,9 +4,11 @@ import { Avatar } from 'twenty-ui/data-display';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 import { EmailThreadMessageBody } from '@/activities/emails/components/EmailThreadMessageBody';
 import { EmailThreadMessageLayout } from '@/activities/emails/components/EmailThreadMessageLayout';
+import { MYAH_INBOX_KEYBOARD_SCROLL_REGION_FOCUS_STYLES } from '@/myah/inbox/constants/MyahInboxKeyboardScrollRegionFocusStyles';
 import { type MyahInboxEmailStoredMessageFieldsFragment } from '~/generated/graphql';
 
 const StyledMessage = styled.article`
+  ${MYAH_INBOX_KEYBOARD_SCROLL_REGION_FOCUS_STYLES}
   min-width: 0;
   overflow-wrap: anywhere;
   padding: ${themeCssVariables.spacing[2]};
