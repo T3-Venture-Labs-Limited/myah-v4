@@ -931,6 +931,7 @@ const buildFirstContactResolverHarness = () => {
     { project: jest.fn() } as never,
     permission as never,
     access as never,
+    { assertCanAct: jest.fn() } as never,
   );
   const orm = {
     executeInWorkspaceContext: jest.fn(async (callback) => callback()),

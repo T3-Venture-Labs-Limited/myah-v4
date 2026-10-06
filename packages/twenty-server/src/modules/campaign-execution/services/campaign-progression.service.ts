@@ -1,4 +1,8 @@
 import { Injectable, Optional } from '@nestjs/common';
+import {
+  MyahWorkspaceAccess,
+  MyahWorkspaceAccessService,
+} from 'src/engine/core-modules/myah-subscription/myah-workspace-access.service';
 import { type EntityManager, type QueryRunner } from 'typeorm';
 
 import { type WorkspaceEntityManager } from 'src/engine/twenty-orm/entity-manager/workspace-entity-manager';
@@ -73,6 +77,7 @@ export class CampaignProgressionService implements CampaignProgressionPort {
   private readonly forecastInvalidation =
     new CampaignForecastInputInvalidationService();
   constructor(
+    private readonly myahAccess: MyahWorkspaceAccessService,
     @Optional() private readonly attemptService?: OutboundEmailAttemptService,
     @Optional() private readonly capacityService?: MailboxCapacityService,
     @Optional() private readonly sequenceService?: CampaignSequenceService,
@@ -209,11 +214,22 @@ export class CampaignProgressionService implements CampaignProgressionPort {
     if (!Number.isFinite(observedAt.getTime()))
       throw new Error('Campaign progression database clock was invalid');
 
+    let workspaceHoldReason: CampaignOccurrenceHoldReason | null = null;
     if (
       workspace[0].activationStatus !== 'ACTIVE' ||
       workspace[0].suspendedAt !== null ||
       workspace[0].deletedAt !== null
     ) {
+      workspaceHoldReason = 'WORKSPACE_NOT_ACTIVE';
+    } else if (
+      [
+        MyahWorkspaceAccess.NEEDS_SUBSCRIPTION,
+        MyahWorkspaceAccess.LAPSED,
+      ].includes(await this.myahAccess.getAccess(input.workspaceId))
+    ) {
+      workspaceHoldReason = 'SUBSCRIPTION_REQUIRED';
+    }
+    if (workspaceHoldReason !== null) {
       const reserved = attempts.filter(
         (attempt) =>
           attempt.source === 'CAMPAIGN_SEQUENCE' &&
@@ -229,7 +245,7 @@ export class CampaignProgressionService implements CampaignProgressionPort {
           await this.attemptService.blockReservedAttemptBeforeProvider(
             {
               reservation: this.reservationIdentity(reserved[0]),
-              reason: 'WORKSPACE_NOT_ACTIVE',
+              reason: workspaceHoldReason,
             },
             manager,
           );
@@ -241,10 +257,10 @@ export class CampaignProgressionService implements CampaignProgressionPort {
       await this.holdOccurrenceAndEnrollment(
         input.occurrenceId,
         String(enrollment[0].id),
-        'WORKSPACE_NOT_ACTIVE',
+        workspaceHoldReason,
         runner,
       );
-      return { status: 'HELD', reason: 'WORKSPACE_NOT_ACTIVE' };
+      return { status: 'HELD', reason: workspaceHoldReason };
     }
     const persistedHoldReason =
       occurrence.state === 'HELD' ? String(occurrence.holdReason) : null;

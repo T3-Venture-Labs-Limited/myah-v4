@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { MyahSubscriptionModule } from 'src/engine/core-modules/myah-subscription/myah-subscription.module';
 
 import { McpCoreController } from 'src/engine/api/mcp/controllers/mcp-core.controller';
 import { McpAuthGuard } from 'src/engine/api/mcp/guards/mcp-auth.guard';
@@ -21,6 +22,7 @@ import { WorkspaceCacheModule } from 'src/engine/workspace-cache/workspace-cache
 
 @Module({
   imports: [
+    MyahSubscriptionModule,
     ApiKeyModule,
     MetricsModule,
     TokenModule,

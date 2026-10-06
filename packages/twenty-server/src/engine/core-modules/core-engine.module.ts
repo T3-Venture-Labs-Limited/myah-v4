@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { MyahSubscriptionModule } from 'src/engine/core-modules/myah-subscription/myah-subscription.module';
 import { APP_FILTER, HttpAdapterHost } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 
@@ -105,6 +106,7 @@ import { FileModule } from './file/file.module';
     ConnectedAccountSyncWebhooksModule,
     UsageModule,
     ClientConfigModule,
+    MyahSubscriptionModule,
     FeatureFlagModule,
     FileModule,
     RowLevelPermissionModule,

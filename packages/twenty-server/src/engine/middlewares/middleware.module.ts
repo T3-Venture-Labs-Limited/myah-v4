@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { MyahSubscriptionModule } from 'src/engine/core-modules/myah-subscription/myah-subscription.module';
 
 import { TokenModule } from 'src/engine/core-modules/auth/token/token.module';
 import { JwtModule } from 'src/engine/core-modules/jwt/jwt.module';
@@ -8,6 +9,7 @@ import { WorkspaceCacheStorageModule } from 'src/engine/workspace-cache-storage/
 
 @Module({
   imports: [
+    MyahSubscriptionModule,
     WorkspaceCacheStorageModule,
     WorkspaceManyOrAllFlatEntityMapsCacheModule,
     TokenModule,

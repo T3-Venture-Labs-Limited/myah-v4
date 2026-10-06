@@ -35,6 +35,7 @@ export type DispatchTrustedOutboundEmailInput =
     };
 
 export type FinalSubmissionAuthorityRejectionReason =
+  | 'SUBSCRIPTION_REQUIRED'
   | 'WORKSPACE_NOT_ACTIVE'
   | 'CAMPAIGN_PAUSED'
   | 'CAMPAIGN_STOPPED'

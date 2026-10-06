@@ -135,6 +135,9 @@ import { AddInstagramMessageV3SnapshotFastInstanceCommand } from 'src/database/c
 import { CreateCampaignForecastProjectionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789992172618-create-campaign-forecast-projection';
 import { AddConnectedAccountSendingPolicyRevisionFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1789992172619-add-connected-account-sending-policy-revision';
 import { InvalidateComposioInstagramAuthoritiesSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-slow-1789307619363-invalidate-composio-instagram-authorities';
+import { CreateMyahSubscriptionAndUsageFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1791215297086-create-myah-subscription-and-usage';
+import { VerifyExistingMyahUsersSlowInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-slow-1791217440633-verify-existing-myah-users';
+import { AddMyahSubscriptionCampaignHoldFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1791224189942-add-myah-subscription-campaign-hold';
 
 export const INSTANCE_COMMANDS = [
   AddViewFieldGroupIdIndexOnViewFieldFastInstanceCommand,
@@ -271,4 +274,7 @@ export const INSTANCE_COMMANDS = [
   CreateCampaignForecastProjectionFastInstanceCommand,
   AddConnectedAccountSendingPolicyRevisionFastInstanceCommand,
   InvalidateComposioInstagramAuthoritiesSlowInstanceCommand,
+  CreateMyahSubscriptionAndUsageFastInstanceCommand,
+  VerifyExistingMyahUsersSlowInstanceCommand,
+  AddMyahSubscriptionCampaignHoldFastInstanceCommand,
 ];

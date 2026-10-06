@@ -5,6 +5,8 @@ import { assertUnreachable } from 'twenty-shared/utils';
 import { CustomException } from 'src/utils/custom-exception';
 
 export enum AiExceptionCode {
+  SUBSCRIPTION_REQUIRED = 'SUBSCRIPTION_REQUIRED',
+  INCLUDED_USAGE_EXHAUSTED = 'INCLUDED_USAGE_EXHAUSTED',
   AGENT_NOT_FOUND = 'AGENT_NOT_FOUND',
   AGENT_ALREADY_EXISTS = 'AGENT_ALREADY_EXISTS',
   AGENT_IS_STANDARD = 'AGENT_IS_STANDARD',
@@ -29,6 +31,10 @@ export enum AiExceptionCode {
 
 const getAiExceptionUserFriendlyMessage = (code: AiExceptionCode) => {
   switch (code) {
+    case AiExceptionCode.SUBSCRIPTION_REQUIRED:
+      return msg`Your workspace subscription has ended. Ask an admin to resubscribe.`;
+    case AiExceptionCode.INCLUDED_USAGE_EXHAUSTED:
+      return msg`This month's AI usage is used up.`;
     case AiExceptionCode.AGENT_NOT_FOUND:
       return msg`Agent not found.`;
     case AiExceptionCode.AGENT_ALREADY_EXISTS:

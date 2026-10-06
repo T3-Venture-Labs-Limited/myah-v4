@@ -924,6 +924,7 @@ describePostgres('InstagramMessageComposer isolated PostgreSQL', () => {
       {} as never,
       permissions,
       access,
+      { assertCanAct: jest.fn() } as never,
     );
     const reconciliation = new InstagramMessageReconciliationService(
       {

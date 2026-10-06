@@ -1374,6 +1374,7 @@ describe('MyahInboxReplyActionDefinition', () => {
         } as never,
         setup.definition,
         {} as never,
+        { assertCanAct: jest.fn() } as never,
       );
       await expect(
         sendService.getReadiness({

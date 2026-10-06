@@ -246,6 +246,7 @@ const createService = (overrides?: {
         getReadableDraftSnapshot,
       } as never,
       { sendMessage, execute } as never,
+      { assertCanAct: jest.fn() } as never,
     ),
     executeInboxReplyLocked,
     createApprovedInboxReplyBinding,

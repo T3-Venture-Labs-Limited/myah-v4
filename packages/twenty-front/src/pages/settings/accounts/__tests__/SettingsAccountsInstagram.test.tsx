@@ -7,6 +7,18 @@ import { i18n } from '@lingui/core';
 import { I18nProvider } from '@lingui/react';
 import fetchMock, { enableFetchMocks } from 'jest-fetch-mock';
 
+let mockSubscription = {
+  isEnabled: false,
+  hasAccess: true,
+  usage: { exhausted: false, instagramReconnectRequired: false },
+};
+jest.mock('twenty-ui/feedback', () => ({
+  InlineBanner: ({ message }: { message: string }) => <aside>{message}</aside>,
+}));
+jest.mock('@/settings/billing/hooks/useMyahWorkspaceUsage', () => ({
+  useMyahWorkspaceUsage: () => mockSubscription,
+}));
+
 enableFetchMocks();
 i18n.load('en', {});
 i18n.activate('en');
@@ -184,6 +196,11 @@ const renderInstagramSettings = () =>
 
 describe('SettingsAccountsInstagram', () => {
   beforeEach(() => {
+    mockSubscription = {
+      isEnabled: false,
+      hasAccess: true,
+      usage: { exhausted: false, instagramReconnectRequired: false },
+    };
     fetchMock.resetMocks();
     mockNavigateToHostedAuth.mockReset();
     mockEnqueueErrorSnackBar.mockReset();
@@ -201,6 +218,165 @@ describe('SettingsAccountsInstagram', () => {
   afterEach(() => {
     jest.useRealTimers();
     window.history.replaceState({}, '', '/settings/accounts/instagram');
+  });
+
+  it.each([null, 'INACTIVE', 'NEEDS_RECONNECT'])(
+    'allows authorization at 100% AI usage for status=%s',
+    async (status) => {
+      mockSubscription = {
+        isEnabled: true,
+        hasAccess: true,
+        usage: { exhausted: true, instagramReconnectRequired: false },
+      };
+      fetchMock.mockResponseOnce(
+        status === null
+          ? ''
+          : JSON.stringify({
+              id: 'account',
+              username: 'fixture',
+              status,
+              lastCheckedAt: null,
+              lastError: null,
+            }),
+      );
+      fetchMock.mockResponseOnce(
+        JSON.stringify({
+          attemptId: 'attempt',
+          redirectUrl: 'https://hosted-auth.example/allowed',
+        }),
+      );
+      const user = userEvent.setup();
+      renderInstagramSettings();
+      const button = await screen.findByRole('button', {
+        name:
+          status === 'NEEDS_RECONNECT'
+            ? 'Reconnect Instagram'
+            : 'Connect Instagram',
+      });
+      await waitFor(() => expect(button).toBeEnabled());
+      await user.click(button);
+      await waitFor(() =>
+        expect(mockNavigateToHostedAuth).toHaveBeenCalledWith(
+          'https://hosted-auth.example/allowed',
+        ),
+      );
+      expect(fetchMock.mock.calls[1][0]).toBe(
+        'http://localhost/rest/myah/unipile/instagram/hosted-auth/' +
+          (status === 'NEEDS_RECONNECT' ? 'reconnect' : 'connect'),
+      );
+      expect(
+        screen.getByText(
+          /Connecting and reconnecting do not use your AI allowance/,
+        ),
+      ).toBeVisible();
+    },
+  );
+
+  it('explains a lapse and uses fresh authorization to reconnect a fully disconnected account at the AI limit', async () => {
+    mockSubscription = {
+      isEnabled: true,
+      hasAccess: true,
+      usage: { exhausted: true, instagramReconnectRequired: true },
+    };
+    fetchMock.mockResponseOnce('');
+    fetchMock.mockResponseOnce(
+      JSON.stringify({
+        attemptId: 'attempt',
+        redirectUrl: 'https://hosted-auth.example/restored',
+      }),
+    );
+    const user = userEvent.setup();
+    renderInstagramSettings();
+    expect(await screen.findByText('Disconnected')).toBeVisible();
+    expect(
+      screen.getByText(
+        /Your Instagram connection needs to be restored after your subscription ended/,
+      ),
+    ).toBeVisible();
+    await user.click(
+      screen.getByRole('button', { name: 'Reconnect Instagram' }),
+    );
+    await waitFor(() =>
+      expect(mockNavigateToHostedAuth).toHaveBeenCalledWith(
+        'https://hosted-auth.example/restored',
+      ),
+    );
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      'http://localhost/rest/myah/unipile/instagram/hosted-auth/connect',
+    );
+  });
+
+  it('hides the lapse prompt as soon as a refreshed account is active, even before the usage cache refreshes', async () => {
+    mockSubscription = {
+      isEnabled: true,
+      hasAccess: true,
+      usage: { exhausted: true, instagramReconnectRequired: true },
+    };
+    fetchMock.mockResponseOnce('');
+    fetchMock.mockResponseOnce(
+      JSON.stringify({
+        id: 'account',
+        username: 'fixture',
+        status: 'ACTIVE',
+        lastCheckedAt: null,
+        lastError: null,
+      }),
+    );
+    const user = userEvent.setup();
+    renderInstagramSettings();
+    expect(await screen.findByText('Disconnected')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Refresh status' }));
+    expect(await screen.findByText('Active')).toBeVisible();
+    expect(
+      screen.queryByText(/needs to be restored after your subscription ended/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Reconnect Instagram' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('retains the lapse explanation but never starts auth while disconnection is unknown', async () => {
+    mockSubscription = {
+      isEnabled: true,
+      hasAccess: true,
+      usage: { exhausted: true, instagramReconnectRequired: true },
+    };
+    fetchMock.mockResponseOnce(
+      JSON.stringify({
+        id: 'account',
+        username: 'fixture',
+        status: 'DELETE_UNKNOWN',
+        lastCheckedAt: null,
+        lastError: null,
+      }),
+    );
+    renderInstagramSettings();
+    expect(await screen.findByText('Disconnect pending')).toBeVisible();
+    expect(
+      screen.getByText(/needs to be restored after your subscription ended/),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Reconnect Instagram' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Disconnect Instagram' }),
+    ).toBeDisabled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables authorization without subscription access, not because of AI usage', async () => {
+    mockSubscription = {
+      isEnabled: true,
+      hasAccess: false,
+      usage: { exhausted: false, instagramReconnectRequired: false },
+    };
+    fetchMock.mockResponseOnce('');
+    renderInstagramSettings();
+    await screen.findByText('Not connected');
+    expect(
+      screen.getByRole('button', { name: 'Connect Instagram' }),
+    ).toBeDisabled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('explains the Instagram connection in customer language', async () => {

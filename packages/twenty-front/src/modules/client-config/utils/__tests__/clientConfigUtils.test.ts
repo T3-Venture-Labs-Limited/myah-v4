@@ -25,6 +25,7 @@ const mockClientConfig = {
   signInPrefilled: false,
   isMultiWorkspaceEnabled: true,
   isEmailVerificationRequired: false,
+  isMyahSubscriptionRequired: false,
   defaultSubdomain: 'app',
   frontDomain: 'localhost',
   support: {

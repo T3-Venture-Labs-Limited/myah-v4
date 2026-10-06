@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { MyahSubscriptionModule } from 'src/engine/core-modules/myah-subscription/myah-subscription.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { ActionApprovalModule } from 'src/engine/core-modules/action-approval/action-approval.module';
@@ -35,6 +36,7 @@ import { UnipileInstagramAccountBindingEntity } from 'src/modules/myah-unipile/e
 
 @Module({
   imports: [
+    MyahSubscriptionModule,
     ActionApprovalModule,
     InstagramActionBudgetModule,
     MessageQueueModule,

@@ -263,6 +263,7 @@ export type BlockReservedAttemptBeforeProviderInput = {
     | 'STALE_FINAL_EVIDENCE'
     | 'AUTHORITY_STALE'
     | 'RECIPIENT_SUPPRESSED'
+    | 'SUBSCRIPTION_REQUIRED'
     | 'WORKSPACE_NOT_ACTIVE'
     | 'CAMPAIGN_PAUSED'
     | 'CAMPAIGN_STOPPED'

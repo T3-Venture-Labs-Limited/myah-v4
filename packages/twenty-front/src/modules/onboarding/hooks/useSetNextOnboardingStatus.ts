@@ -8,6 +8,7 @@ import {
   type CurrentWorkspace,
   currentWorkspaceState,
 } from '@/auth/states/currentWorkspaceState';
+import { useMyahWorkspaceUsage } from '@/settings/billing/hooks/useMyahWorkspaceUsage';
 import { billingState } from '@/client-config/states/billingState';
 import { calendarBookingPageIdState } from '@/client-config/states/calendarBookingPageIdState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
@@ -21,6 +22,8 @@ type GetNextOnboardingStatusArgs = {
   currentWorkspace: CurrentWorkspace | null;
   calendarBookingPageId: string | null;
   isBillingEnabled: boolean;
+  isMyahSubscriptionRequired: boolean;
+  myahAccessState: string | undefined;
 };
 
 const getNextOnboardingStatus = ({
@@ -28,10 +31,17 @@ const getNextOnboardingStatus = ({
   currentWorkspace,
   calendarBookingPageId,
   isBillingEnabled,
+  isMyahSubscriptionRequired,
+  myahAccessState,
 }: GetNextOnboardingStatusArgs) => {
-  const isPlanRequired =
-    isBillingEnabled &&
-    (currentWorkspace?.billingSubscriptions?.length ?? 0) === 0;
+  const isPlanRequired = isMyahSubscriptionRequired
+    ? !myahAccessState ||
+      ['NEEDS_SUBSCRIPTION', 'LAPSED'].includes(myahAccessState)
+    : isBillingEnabled &&
+      (currentWorkspace?.billingSubscriptions?.length ?? 0) === 0;
+
+  if (isMyahSubscriptionRequired && isPlanRequired)
+    return OnboardingStatus.PLAN_REQUIRED;
 
   if (currentUser?.onboardingStatus === OnboardingStatus.WORKSPACE_ACTIVATION) {
     return OnboardingStatus.SYNC_EMAIL;
@@ -76,6 +86,9 @@ export const useSetNextOnboardingStatus = () => {
   const calendarBookingPageId = useAtomStateValue(calendarBookingPageIdState);
   const billing = useAtomStateValue(billingState);
   const isBillingEnabled = billing?.isBillingEnabled ?? false;
+  const { isEnabled: isMyahSubscriptionRequired, usage } =
+    useMyahWorkspaceUsage();
+  const myahAccessState = usage?.state;
 
   return useCallback(() => {
     const nextOnboardingStatus = getNextOnboardingStatus({
@@ -83,6 +96,8 @@ export const useSetNextOnboardingStatus = () => {
       currentWorkspace,
       calendarBookingPageId,
       isBillingEnabled,
+      isMyahSubscriptionRequired,
+      myahAccessState,
     });
     store.set(currentUserState.atom, (current) => {
       if (isDefined(current)) {
@@ -98,6 +113,8 @@ export const useSetNextOnboardingStatus = () => {
     currentWorkspace,
     calendarBookingPageId,
     isBillingEnabled,
+    isMyahSubscriptionRequired,
+    myahAccessState,
     store,
   ]);
 };

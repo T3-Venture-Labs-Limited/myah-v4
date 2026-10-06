@@ -13,6 +13,18 @@ import {
 } from 'src/engine/metadata-modules/ai/ai-chat/utils/map-error-to-stream-error.util';
 
 describe('mapErrorToStreamError', () => {
+  it.each([
+    AiExceptionCode.INCLUDED_USAGE_EXHAUSTED,
+    AiExceptionCode.SUBSCRIPTION_REQUIRED,
+  ])('preserves %s across the persisted SSE boundary', (code) => {
+    expect(
+      mapErrorToStreamError(new AiException('Action paused', code)),
+    ).toEqual({
+      code,
+      message: 'Action paused',
+    });
+  });
+
   it('maps an AiException to its typed code and message', () => {
     const error = new AiException(
       'No AI models are available. Configure at least one AI provider.',

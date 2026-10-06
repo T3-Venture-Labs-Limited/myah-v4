@@ -14,14 +14,16 @@ const StyledBackground = styled.div`
 type OnboardingLayoutProps = {
   children: ReactNode;
   onBack?: () => void;
+  hideHeader?: boolean;
 };
 
 export const OnboardingLayout = ({
   children,
   onBack,
+  hideHeader = false,
 }: OnboardingLayoutProps) => (
   <StyledBackground>
-    <OnboardingHeader onBack={onBack} />
+    {!hideHeader && <OnboardingHeader onBack={onBack} />}
     {children}
   </StyledBackground>
 );

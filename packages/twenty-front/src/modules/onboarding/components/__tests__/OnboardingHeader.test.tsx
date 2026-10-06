@@ -1,6 +1,7 @@
 import { i18n } from '@lingui/core';
 import { I18nProvider } from '@lingui/react';
 import { fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider } from 'twenty-ui/theme-constants';
 
 import { OnboardingHeader } from '@/onboarding/components/OnboardingHeader';
@@ -27,7 +28,9 @@ it('keeps the onboarding content without the misleading free-credits header', ()
   render(
     <I18nProvider i18n={i18n}>
       <ThemeProvider colorScheme="light">
-        <OnboardingStepLayout />
+        <MemoryRouter>
+          <OnboardingStepLayout />
+        </MemoryRouter>
       </ThemeProvider>
     </I18nProvider>,
   );

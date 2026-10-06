@@ -6,6 +6,7 @@ import {
   UsePipes,
 } from '@nestjs/common';
 import { Args, Mutation } from '@nestjs/graphql';
+import { MyahUsageService } from 'src/engine/core-modules/myah-subscription/myah-usage.service';
 
 import { PermissionFlagType } from 'twenty-shared/constants';
 
@@ -46,6 +47,7 @@ export class SendEmailResolver {
     private readonly fileEmailAttachmentService: FileEmailAttachmentService,
     private readonly sendEmailService: SendEmailService,
     private readonly composeSendService: MyahComposeEmailSendService,
+    private readonly myahUsage: MyahUsageService,
   ) {}
 
   @Mutation(() => SendEmailOutputDTO)
@@ -54,6 +56,7 @@ export class SendEmailResolver {
     @AuthWorkspace() workspace: WorkspaceEntity,
     @AuthUserWorkspaceId() userWorkspaceId: string,
   ): Promise<SendEmailOutputDTO> {
+    await this.myahUsage.assertCanAct(workspace.id);
     try {
       await this.connectedAccountMetadataService.verifyOwnership({
         id: input.connectedAccountId,

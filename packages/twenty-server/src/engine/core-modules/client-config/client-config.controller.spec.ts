@@ -36,6 +36,7 @@ describe('ClientConfigController', () => {
   describe('getClientConfig', () => {
     it('should return client config from service', async () => {
       const mockClientConfig = {
+        isMyahSubscriptionRequired: false,
         billing: {
           isBillingEnabled: true,
           billingUrl: 'https://billing.example.com',

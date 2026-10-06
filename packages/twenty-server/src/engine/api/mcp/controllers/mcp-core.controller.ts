@@ -13,6 +13,10 @@ import {
 } from '@nestjs/common';
 
 import { type Response } from 'express';
+import {
+  MyahSubscriptionApiGuard,
+  MyahUsageRestApiExceptionFilter,
+} from 'src/engine/core-modules/myah-subscription/myah-subscription-api-access.service';
 import { isDefined } from 'twenty-shared/utils';
 
 import { JsonRpc } from 'src/engine/api/mcp/dtos/json-rpc';
@@ -31,8 +35,13 @@ import { NoPermissionGuard } from 'src/engine/guards/no-permission.guard';
 import { WorkspaceAuthGuard } from 'src/engine/guards/workspace-auth.guard';
 
 @Controller('mcp')
-@UseGuards(McpAuthGuard, WorkspaceAuthGuard, NoPermissionGuard)
-@UseFilters(RestApiExceptionFilter)
+@UseGuards(
+  McpAuthGuard,
+  WorkspaceAuthGuard,
+  MyahSubscriptionApiGuard,
+  NoPermissionGuard,
+)
+@UseFilters(RestApiExceptionFilter, MyahUsageRestApiExceptionFilter)
 export class McpCoreController {
   constructor(private readonly mcpProtocolService: McpProtocolService) {}
 

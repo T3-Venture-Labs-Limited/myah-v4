@@ -483,6 +483,7 @@ describe('Campaign Stop history settlement (PostgreSQL)', () => {
         generateEnrollmentId: randomUUID,
         generateOccurrenceId: randomUUID,
       },
+      { assertCanAct: jest.fn() } as never,
     );
 
     return { review, service };

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { MyahSubscriptionModule } from 'src/engine/core-modules/myah-subscription/myah-subscription.module';
 
 import { CampaignSequenceAuthorizationService } from 'src/engine/core-modules/campaign-sequence-authority/services/campaign-sequence-authorization.service';
 import { CampaignSequenceAuthorityModule } from 'src/engine/core-modules/campaign-sequence-authority/campaign-sequence-authority.module';
@@ -75,6 +76,7 @@ import { MyahAgentModule } from 'src/engine/core-modules/myah-agent/myah-agent.m
  */
 @Module({
   imports: [
+    MyahSubscriptionModule,
     CampaignExecutionModule,
     CampaignSequenceAuthorityModule,
     MyahInboxContactTriageModule,

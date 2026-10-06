@@ -18,6 +18,7 @@ import { isClickHouseConfiguredState } from '@/client-config/states/isClickHouse
 import { isCloudflareIntegrationEnabledState } from '@/client-config/states/isCloudflareIntegrationEnabledState';
 import { isDDLLockedState } from '@/client-config/states/isDDLLockedState';
 import { isEmailingDomainInDemoModeState } from '@/client-config/states/isEmailingDomainInDemoModeState';
+import { isMyahSubscriptionRequiredState } from '@/client-config/states/isMyahSubscriptionRequiredState';
 import { isEmailVerificationRequiredState } from '@/client-config/states/isEmailVerificationRequiredState';
 import { isGoogleCalendarEnabledState } from '@/client-config/states/isGoogleCalendarEnabledState';
 import { isGoogleMessagingEnabledState } from '@/client-config/states/isGoogleMessagingEnabledState';
@@ -85,6 +86,9 @@ export const useClientConfig = (): UseClientConfigResult => {
     isEmailVerificationRequiredState,
   );
 
+  const setIsMyahSubscriptionRequired = useSetAtomState(
+    isMyahSubscriptionRequiredState,
+  );
   const setBilling = useSetAtomState(billingState);
   const setSupportChat = useSetAtomState(supportChatState);
 
@@ -272,6 +276,7 @@ export const useClientConfig = (): UseClientConfigResult => {
       setIsDeveloperDefaultSignInPrefilled(clientConfig.signInPrefilled);
       setIsMultiWorkspaceEnabled(clientConfig.isMultiWorkspaceEnabled);
       setIsEmailVerificationRequired(clientConfig.isEmailVerificationRequired);
+      setIsMyahSubscriptionRequired(clientConfig.isMyahSubscriptionRequired);
       setBilling(clientConfig.billing);
       setSupportChat(clientConfig.support);
 
@@ -347,6 +352,7 @@ export const useClientConfig = (): UseClientConfigResult => {
     setIsConfigVariablesInDbEnabled,
     setIsDeveloperDefaultSignInPrefilled,
     setIsEmailVerificationRequired,
+    setIsMyahSubscriptionRequired,
     setIsImapSmtpCaldavEnabled,
     setIsManagedEmailEnabled,
     setIsMultiWorkspaceEnabled,

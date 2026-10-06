@@ -5,7 +5,8 @@ import { Paragraph } from '@tiptap/extension-paragraph';
 import { Text } from '@tiptap/extension-text';
 import { Placeholder } from '@tiptap/extensions/placeholder';
 import { useEditor } from '@tiptap/react';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
+import { useMyahWorkspaceUsage } from '@/settings/billing/hooks/useMyahWorkspaceUsage';
 import { isDefined } from 'twenty-shared/utils';
 
 import { AGENT_CHAT_RESTORE_EDITOR_CONTENT_EVENT_NAME } from '@/ai/constants/AgentChatRestoreEditorContentEventName';
@@ -42,6 +43,9 @@ const textToTiptapContent = (text: string) => ({
 });
 
 export const useAiChatEditor = () => {
+  const { isEnabled, hasAccess, usage } = useMyahWorkspaceUsage();
+  const isMyahUsageBlocked =
+    isEnabled && (!hasAccess || usage?.exhausted === true);
   const setAgentChatInput = useSetAtomState(agentChatInputState);
   const currentAiChatThread = useAtomStateValue(currentAiChatThreadState);
   const [agentChatDraftsByThreadId, setAgentChatDraftsByThreadId] =
@@ -73,11 +77,16 @@ export const useAiChatEditor = () => {
   );
 
   const editor = useEditor({
+    editable: !isMyahUsageBlocked,
     content: initialContent,
     extensions,
     editorProps: {
       handleKeyDown: (view, event) => {
         if (event.key === 'Enter' && !event.shiftKey) {
+          if (isMyahUsageBlocked) {
+            event.preventDefault();
+            return true;
+          }
           const suggestionState = MENTION_SUGGESTION_PLUGIN_KEY.getState(
             view.state,
           );
@@ -123,9 +132,16 @@ export const useAiChatEditor = () => {
     injectCSS: false,
   });
 
+  useEffect(() => {
+    // Do not emit a content update or create a draft thread when access changes.
+    editor?.setEditable(!isMyahUsageBlocked, false);
+  }, [editor, isMyahUsageBlocked]);
+
   // Keep search function in sync via Tiptap extension storage,
   // avoiding stale closures without useRef
   if (isDefined(editor)) {
+    // SAFETY: MentionSuggestion is registered above; its addStorage installs
+    // searchMentionRecords under the 'mention-suggestion' extension name.
     const storage = editor.extensionStorage as unknown as Record<
       string,
       unknown
@@ -151,9 +167,16 @@ export const useAiChatEditor = () => {
   });
 
   const handleSendAndClear = () => {
+    if (isMyahUsageBlocked) return;
     dispatchAgentChatSendMessageEvent();
     editor?.commands.clearContent();
   };
 
-  return { editor, handleSendAndClear };
+  return {
+    editor,
+    handleSendAndClear,
+    isMyahUsageBlocked,
+    myahUsageExhausted: isEnabled && usage?.exhausted === true,
+    isMyahSubscriptionRequired: isEnabled,
+  };
 };

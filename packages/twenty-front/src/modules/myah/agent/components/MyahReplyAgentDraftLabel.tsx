@@ -3,6 +3,7 @@ import { useContext } from 'react';
 import { styled } from '@linaria/react';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
 
+import { MyahReplyAgentBillingLink } from '@/myah/agent/components/MyahReplyAgentBillingLink';
 import { MyahReplyAgentFailureReason } from '@/myah/agent/components/MyahReplyAgentFailureReason';
 import { GET_MYAH_REPLY_AGENT_DRAFT_LABEL } from '@/myah/agent/graphql/myahReplyAgentOperations';
 
@@ -53,6 +54,7 @@ const AgentLabel = ({ channel, conversationRecordId }: AgentLabelProps) => {
           <MyahReplyAgentFailureReason
             reason={label.reason ?? 'the agent handed this off'}
           />
+          <MyahReplyAgentBillingLink reason={label.reason} />
         </>
       ) : (
         `✦ Drafted by agent${label.campaignName ? ` · ${label.campaignName}` : ''}`

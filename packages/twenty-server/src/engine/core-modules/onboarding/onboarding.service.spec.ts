@@ -1,4 +1,8 @@
 import { Test, type TestingModule } from '@nestjs/testing';
+import {
+  MyahWorkspaceAccess,
+  MyahWorkspaceAccessService,
+} from 'src/engine/core-modules/myah-subscription/myah-workspace-access.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
 import { WorkspaceActivationStatus } from 'twenty-shared/workspace';
@@ -37,6 +41,14 @@ describe('OnboardingService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OnboardingService,
+        {
+          provide: MyahWorkspaceAccessService,
+          useValue: {
+            getAccess: jest
+              .fn()
+              .mockResolvedValue(MyahWorkspaceAccess.COMPLIMENTARY),
+          },
+        },
         {
           provide: BillingService,
           useValue: {

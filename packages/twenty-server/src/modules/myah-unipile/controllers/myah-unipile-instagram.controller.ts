@@ -12,6 +12,10 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { PermissionFlagType } from 'twenty-shared/constants';
+import {
+  MyahSubscriptionApiGuard,
+  MyahUsageRestApiExceptionFilter,
+} from 'src/engine/core-modules/myah-subscription/myah-subscription-api-access.service';
 import { z } from 'zod';
 
 import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
@@ -62,9 +66,10 @@ const hostedAuthNotificationSchema = z.object({
 @UseGuards(
   JwtAuthGuard,
   WorkspaceAuthGuard,
+  MyahSubscriptionApiGuard,
   SettingsPermissionGuard(PermissionFlagType.CONNECTED_ACCOUNTS),
 )
-@UseFilters(PermissionsRestApiExceptionFilter)
+@UseFilters(PermissionsRestApiExceptionFilter, MyahUsageRestApiExceptionFilter)
 export class MyahUnipileInstagramController {
   constructor(
     private readonly hostedAuthService: UnipileHostedAuthService,

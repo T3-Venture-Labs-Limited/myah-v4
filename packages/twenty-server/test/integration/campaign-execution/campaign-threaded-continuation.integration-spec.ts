@@ -222,6 +222,7 @@ describe('Campaign three-email threaded continuation', () => {
     const capacity = new MailboxCapacityService();
     const attemptService = new OutboundEmailAttemptService(capacity);
     service = new CampaignProgressionService(
+      { getAccess: jest.fn(async () => 'ACTIVE') } as never,
       attemptService,
       capacity,
       sequence as never,

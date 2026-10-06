@@ -1,5 +1,10 @@
+import { isMyahSubscriptionRequiredState } from '@/client-config/states/isMyahSubscriptionRequiredState';
+import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
+import { MyahPaymentSuccess } from '~/pages/onboarding/MyahPaymentSuccess';
 import { SubTitle } from '@/auth/components/SubTitle';
 import { currentUserState } from '@/auth/states/currentUserState';
+import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
+import { useLocation } from 'react-router-dom';
 import { OnboardingAnimatedReveal } from '@/onboarding/components/OnboardingAnimatedReveal';
 import { OnboardingVerifyLayout } from '@/onboarding/components/OnboardingVerifyLayout';
 import { useOnboardingMotionTransition } from '@/onboarding/hooks/useOnboardingMotionTransition';
@@ -25,6 +30,19 @@ const StyledRetryButtonContainer = styled.div`
 `;
 
 export const PaymentSuccess = () => {
+  const currentWorkspace = useAtomStateValue(currentWorkspaceState);
+  const { search } = useLocation();
+  const isMyahSubscriptionRequired = useAtomStateValue(
+    isMyahSubscriptionRequiredState,
+  );
+  return isMyahSubscriptionRequired ? (
+    <MyahPaymentSuccess key={`${currentWorkspace?.id}:${search}`} />
+  ) : (
+    <LegacyPaymentSuccess />
+  );
+};
+
+const LegacyPaymentSuccess = () => {
   const subscriptionStatus = useSubscriptionStatus();
   const [getCurrentUser] = useLazyQuery(GetCurrentUserDocument, {
     fetchPolicy: 'network-only',

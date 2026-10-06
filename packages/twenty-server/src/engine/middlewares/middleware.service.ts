@@ -1,4 +1,9 @@
 import { Injectable } from '@nestjs/common';
+import { MyahSubscriptionApiAccessService } from 'src/engine/core-modules/myah-subscription/myah-subscription-api-access.service';
+import {
+  AiException,
+  AiExceptionCode,
+} from 'src/engine/metadata-modules/ai/ai.exception';
 
 import { isNonEmptyString } from '@sniptt/guards';
 import { type Request, type Response } from 'express';
@@ -10,7 +15,10 @@ import { AuthGraphqlApiExceptionFilter } from 'src/engine/core-modules/auth/filt
 import { AccessTokenService } from 'src/engine/core-modules/auth/token/services/access-token.service';
 import { getAuthExceptionRestStatus } from 'src/engine/core-modules/auth/utils/get-auth-exception-rest-status.util';
 import { ExceptionHandlerService } from 'src/engine/core-modules/exception-handler/exception-handler.service';
-import { ErrorCode } from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
+import {
+  ErrorCode,
+  ForbiddenError,
+} from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
 import { JwtWrapperService } from 'src/engine/core-modules/jwt/services/jwt-wrapper.service';
 import { WorkspaceManyOrAllFlatEntityMapsCacheService } from 'src/engine/metadata-modules/flat-entity/services/workspace-many-or-all-flat-entity-maps-cache.service';
 import { INTERNAL_SERVER_ERROR } from 'src/engine/middlewares/constants/default-error-message.constant';
@@ -30,6 +38,7 @@ export class MiddlewareService {
     private readonly flatEntityMapsCacheService: WorkspaceManyOrAllFlatEntityMapsCacheService,
     private readonly exceptionHandlerService: ExceptionHandlerService,
     private readonly jwtWrapperService: JwtWrapperService,
+    private readonly myahSubscriptionAccess: MyahSubscriptionApiAccessService,
   ) {}
 
   public isTokenPresent(request: Request): boolean {
@@ -55,6 +64,11 @@ export class MiddlewareService {
         statusCode,
         messages: [error?.message || INTERNAL_SERVER_ERROR],
         error: error?.code || ErrorCode.INTERNAL_SERVER_ERROR,
+        // Same shape as the REST exception filters, so the app can show Resubscribe.
+        ...(error instanceof AiException &&
+        error.code === AiExceptionCode.SUBSCRIPTION_REQUIRED
+          ? { code: error.code }
+          : {}),
       }),
     );
 
@@ -65,7 +79,12 @@ export class MiddlewareService {
   public writeGraphqlResponseOnExceptionCaught(res: Response, error: any) {
     let errors;
 
-    if (error instanceof AuthException) {
+    if (
+      error instanceof AiException &&
+      error.code === AiExceptionCode.SUBSCRIPTION_REQUIRED
+    ) {
+      errors = [new ForbiddenError(error)];
+    } else if (error instanceof AuthException) {
       try {
         const authFilter = new AuthGraphqlApiExceptionFilter();
 
@@ -114,6 +133,7 @@ export class MiddlewareService {
     }
 
     bindDataToRequestObject(data, request, metadataVersion);
+    await this.myahSubscriptionAccess.assertRequestAllowed(request);
   }
 
   public async hydrateGraphqlRequest(request: Request) {
@@ -133,6 +153,9 @@ export class MiddlewareService {
       : undefined;
 
     bindDataToRequestObject(data, request, metadataVersion);
+    if (['/graphql', '/metadata'].includes(request.path.replace(/\/+$/, ''))) {
+      await this.myahSubscriptionAccess.assertRequestAllowed(request);
+    }
   }
 
   private hasErrorStatus(error: unknown): error is { status: number } {
@@ -141,6 +164,11 @@ export class MiddlewareService {
 
   // oxlint-disable-next-line typescript/no-explicit-any
   private getStatus(error: any): number {
+    if (
+      error instanceof AiException &&
+      error.code === AiExceptionCode.SUBSCRIPTION_REQUIRED
+    )
+      return 403;
     if (this.hasErrorStatus(error)) {
       return error.status;
     }

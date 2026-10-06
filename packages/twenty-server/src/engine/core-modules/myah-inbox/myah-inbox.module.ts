@@ -1,4 +1,5 @@
 import { forwardRef, Module } from '@nestjs/common';
+import { MyahSubscriptionModule } from 'src/engine/core-modules/myah-subscription/myah-subscription.module';
 
 import { ActionApprovalModule } from 'src/engine/core-modules/action-approval/action-approval.module';
 import { ActionApprovalService } from 'src/engine/core-modules/action-approval/services/action-approval.service';
@@ -39,6 +40,7 @@ import { MessagingSendManagerModule } from 'src/modules/messaging/message-outbou
 
 @Module({
   imports: [
+    MyahSubscriptionModule,
     ActionApprovalModule,
     MyahInboxReplyContextModule,
     MyahAgentModule,

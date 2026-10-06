@@ -253,6 +253,9 @@ export class ClientConfigMaintenanceMode {
 
 @ObjectType()
 export class ClientConfig {
+  @Field(() => Boolean)
+  isMyahSubscriptionRequired: boolean;
+
   @Field(() => String, { nullable: true })
   appVersion?: string;
 

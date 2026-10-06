@@ -54,6 +54,8 @@ type UnipileHostedAuthService = {
 
 type UnipileHostedAuthServiceModule = {
   UnipileHostedAuthService: new (
+    usageService: { assertCanAct: jest.Mock },
+    queue: { add: jest.Mock },
     attemptRepository: {
       create: jest.Mock;
       save: jest.Mock;
@@ -190,6 +192,8 @@ describe('UnipileHostedAuthService', () => {
         {} as never,
       );
       const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+        { assertCanAct: jest.fn() },
+        { add: jest.fn() },
         attemptRepository,
         {
           findOne: jest.fn().mockResolvedValue(null),
@@ -274,6 +278,8 @@ describe('UnipileHostedAuthService', () => {
       }),
     };
     const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+      { assertCanAct: jest.fn() },
+      { add: jest.fn() },
       attemptRepository,
       bindingRepository,
       client,
@@ -356,6 +362,8 @@ describe('UnipileHostedAuthService', () => {
       })),
     };
     const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+      { assertCanAct: jest.fn() },
+      { add: jest.fn() },
       attemptRepository,
       { findOne: jest.fn().mockResolvedValue(null) },
       client,
@@ -414,6 +422,8 @@ describe('UnipileHostedAuthService', () => {
       createHostedAuthLink: jest.fn().mockRejectedValue(safeError),
     };
     const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+      { assertCanAct: jest.fn() },
+      { add: jest.fn() },
       attemptRepository,
       { findOne: jest.fn().mockResolvedValue(null) },
       client,
@@ -497,6 +507,8 @@ describe('UnipileHostedAuthService', () => {
         }),
       };
       const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+        { assertCanAct: jest.fn() },
+        { add: jest.fn() },
         attemptRepository,
         bindingRepository,
         client,
@@ -602,6 +614,8 @@ describe('UnipileHostedAuthService', () => {
       };
       const client = { createHostedAuthLink: jest.fn() };
       const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+        { assertCanAct: jest.fn() },
+        { add: jest.fn() },
         attemptRepository,
         bindingRepository,
         client,
@@ -722,6 +736,8 @@ describe('UnipileHostedAuthService', () => {
       }),
     };
     const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+      { assertCanAct: jest.fn() },
+      { add: jest.fn() },
       attemptRepository,
       { findOne: jest.fn() },
       client,
@@ -852,6 +868,8 @@ describe('UnipileHostedAuthService', () => {
     };
     const accountService = { finalizeHostedAuthConnection: jest.fn() };
     const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+      { assertCanAct: jest.fn() },
+      { add: jest.fn() },
       attemptRepository,
       { findOne: jest.fn() },
       client,
@@ -944,6 +962,8 @@ describe('UnipileHostedAuthService', () => {
     };
     const accountService = { finalizeHostedAuthConnection: jest.fn() };
     const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+      { assertCanAct: jest.fn() },
+      { add: jest.fn() },
       attemptRepository,
       { findOne: jest.fn() },
       client,
@@ -1044,6 +1064,8 @@ describe('UnipileHostedAuthService', () => {
     };
     const accountService = { finalizeHostedAuthConnection: jest.fn() };
     const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+      { assertCanAct: jest.fn() },
+      { add: jest.fn() },
       attemptRepository,
       { findOne: jest.fn() },
       client,
@@ -1154,6 +1176,8 @@ describe('UnipileHostedAuthService', () => {
       };
       const accountService = { finalizeHostedAuthConnection: jest.fn() };
       const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+        { assertCanAct: jest.fn() },
+        { add: jest.fn() },
         attemptRepository,
         { findOne: jest.fn() },
         client,
@@ -1222,6 +1246,8 @@ describe('UnipileHostedAuthService', () => {
     };
     const accountService = { finalizeHostedAuthConnection: jest.fn() };
     const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+      { assertCanAct: jest.fn() },
+      { add: jest.fn() },
       attemptRepository,
       { findOne: jest.fn() },
       client,
@@ -1294,6 +1320,8 @@ describe('UnipileHostedAuthService', () => {
     };
     const accountService = { finalizeHostedAuthConnection: jest.fn() };
     const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+      { assertCanAct: jest.fn() },
+      { add: jest.fn() },
       attemptRepository,
       { findOne: jest.fn() },
       client,
@@ -1387,6 +1415,8 @@ describe('UnipileHostedAuthService', () => {
       };
       const accountService = { finalizeHostedAuthConnection: jest.fn() };
       const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+        { assertCanAct: jest.fn() },
+        { add: jest.fn() },
         attemptRepository,
         { findOne: jest.fn() },
         client,
@@ -1497,6 +1527,8 @@ describe('UnipileHostedAuthService', () => {
       };
       const accountService = { finalizeHostedAuthConnection: jest.fn() };
       const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+        { assertCanAct: jest.fn() },
+        { add: jest.fn() },
         attemptRepository,
         { findOne: jest.fn() },
         client,
@@ -1594,6 +1626,8 @@ describe('UnipileHostedAuthService', () => {
         }),
       };
       const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+        { assertCanAct: jest.fn() },
+        { add: jest.fn() },
         attemptRepository,
         { findOne: jest.fn() },
         {
@@ -1741,6 +1775,8 @@ describe('UnipileHostedAuthService', () => {
       ),
     };
     const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+      { assertCanAct: jest.fn() },
+      { add: jest.fn() },
       attemptRepository,
       { findOne: jest.fn() },
       {
@@ -1897,6 +1933,8 @@ describe('UnipileHostedAuthService', () => {
         }),
       };
       const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+        { assertCanAct: jest.fn() },
+        { add: jest.fn() },
         attemptRepository,
         { findOne: jest.fn() },
         {
@@ -1997,6 +2035,8 @@ describe('UnipileHostedAuthService', () => {
       }),
     };
     const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+      { assertCanAct: jest.fn() },
+      { add: jest.fn() },
       {
         create: jest.fn(),
         save: jest.fn(),
@@ -2085,6 +2125,8 @@ describe('UnipileHostedAuthService', () => {
       }),
     };
     const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+      { assertCanAct: jest.fn() },
+      { add: jest.fn() },
       {
         create: jest.fn(),
         save: jest.fn(),
@@ -2179,6 +2221,8 @@ describe('UnipileHostedAuthService', () => {
     };
     const accountService = { finalizeHostedAuthConnection: jest.fn() };
     const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+      { assertCanAct: jest.fn() },
+      { add: jest.fn() },
       attemptRepository,
       { findOne: jest.fn() },
       {
@@ -2240,6 +2284,8 @@ describe('UnipileHostedAuthService', () => {
       }),
     };
     const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+      { assertCanAct: jest.fn() },
+      { add: jest.fn() },
       attemptRepository,
       { findOne: jest.fn() },
       { createHostedAuthLink: jest.fn() },
@@ -2305,6 +2351,8 @@ describe('UnipileHostedAuthService', () => {
         }),
       };
       const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+        { assertCanAct: jest.fn() },
+        { add: jest.fn() },
         attemptRepository,
         { findOne: jest.fn() },
         { createHostedAuthLink: jest.fn() },
@@ -2342,6 +2390,8 @@ describe('UnipileHostedAuthService', () => {
     const client = { createHostedAuthLink: jest.fn() };
     const twentyConfigService = { get: jest.fn() };
     const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+      { assertCanAct: jest.fn() },
+      { add: jest.fn() },
       attemptRepository,
       bindingRepository,
       client,
@@ -2461,6 +2511,8 @@ describe('UnipileHostedAuthService', () => {
       }),
     };
     const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+      { assertCanAct: jest.fn() },
+      { add: jest.fn() },
       attemptRepository,
       { findOne: jest.fn() },
       {
@@ -2582,6 +2634,8 @@ describe('UnipileHostedAuthService', () => {
       const accountService = { finalizeHostedAuthConnection: jest.fn() };
       const availability = createAvailabilityService();
       const service = new hostedAuthServiceModule.UnipileHostedAuthService(
+        { assertCanAct: jest.fn() },
+        { add: jest.fn() },
         attemptRepository,
         bindingRepository,
         client,

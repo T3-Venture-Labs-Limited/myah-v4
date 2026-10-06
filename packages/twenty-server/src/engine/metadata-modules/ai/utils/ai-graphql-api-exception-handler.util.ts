@@ -39,6 +39,8 @@ export const aiGraphqlApiExceptionHandler = (error: Error) => {
       case AiExceptionCode.NO_FAILED_TURN_TO_RETRY:
       case AiExceptionCode.INBOX_SELECTION_CANNOT_BE_QUEUED:
         throw new ConflictError(error);
+      case AiExceptionCode.SUBSCRIPTION_REQUIRED:
+      case AiExceptionCode.INCLUDED_USAGE_EXHAUSTED:
       case AiExceptionCode.AGENT_IS_STANDARD:
       case AiExceptionCode.ROLE_CANNOT_BE_ASSIGNED_TO_AGENTS:
         throw new ForbiddenError(error);

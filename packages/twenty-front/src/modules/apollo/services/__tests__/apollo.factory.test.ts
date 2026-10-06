@@ -41,6 +41,7 @@ jest.mock('@/apollo/utils/getTokenPair', () => ({
 const mockOnError = jest.fn();
 const mockOnNetworkError = jest.fn();
 const mockOnPayloadTooLarge = jest.fn();
+const mockOnSubscriptionRequired = jest.fn();
 
 const mockWorkspaceMember = {
   id: 'workspace-member-id',
@@ -103,6 +104,7 @@ const createMockOptions = (): Options => ({
   onError: mockOnError,
   onNetworkError: mockOnNetworkError,
   onPayloadTooLarge: mockOnPayloadTooLarge,
+  onSubscriptionRequired: mockOnSubscriptionRequired,
   appVersion: '1.0.0',
 });
 
@@ -138,6 +140,56 @@ describe('ApolloFactory', () => {
     const options = createMockOptions();
     const apolloFactory = new ApolloFactory(options);
     expect(apolloFactory).toBeInstanceOf(ApolloFactory);
+  });
+
+  it.each(['graphql', 'rest'])(
+    'requests subscription refresh for a %s subscription refusal',
+    async (transport) => {
+      mockOnSubscriptionRequired.mockClear();
+      fetchMock.mockResponse(
+        JSON.stringify(
+          transport === 'graphql'
+            ? {
+                errors: [
+                  {
+                    message: 'Subscription required',
+                    extensions: {
+                      code: 'FORBIDDEN',
+                      subCode: 'SUBSCRIPTION_REQUIRED',
+                    },
+                  },
+                ],
+              }
+            : {
+                statusCode: 403,
+                code: 'SUBSCRIPTION_REQUIRED',
+                messages: ['Subscription required'],
+              },
+        ),
+        { status: transport === 'rest' ? 403 : 200 },
+      );
+      await expect(makeRequest()).rejects.toBeDefined();
+      expect(mockOnSubscriptionRequired).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('does not request a subscription refresh for exhausted AI usage', async () => {
+    mockOnSubscriptionRequired.mockClear();
+    fetchMock.mockResponse(
+      JSON.stringify({
+        errors: [
+          {
+            message: 'AI used up',
+            extensions: {
+              code: 'FORBIDDEN',
+              subCode: 'INCLUDED_USAGE_EXHAUSTED',
+            },
+          },
+        ],
+      }),
+    );
+    await expect(makeRequest()).rejects.toBeDefined();
+    expect(mockOnSubscriptionRequired).not.toHaveBeenCalled();
   });
 
   it('should initialize with the correct workspace member', () => {

@@ -2,6 +2,7 @@ import { computeLogicalActionKey } from 'src/engine/core-modules/action-approval
 import { INSTAGRAM_MESSAGE_V3_DIRECT_INTERACTION_CONTEXT } from 'src/engine/core-modules/action-approval/definitions/instagram-message-action.definition';
 import { computeInstagramActionTargetFingerprints } from 'src/engine/core-modules/instagram-action-budget/utils/instagram-action-target-fingerprint.util';
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { MyahUsageService } from 'src/engine/core-modules/myah-subscription/myah-usage.service';
 
 import { INSTAGRAM_MESSAGE_MAX_BODY_BYTES } from 'twenty-shared/constants';
 import { getUtf8ByteLength } from 'twenty-shared/utils';
@@ -74,6 +75,7 @@ export class InstagramMessageSendService {
     private readonly messageProjectionWriter: InstagramMessageReceiptProjectionService,
     private readonly permissionService: InstagramMessagePermissionService,
     private readonly recordAccessService: InstagramMessageRecordAccessService,
+    private readonly myahUsage: MyahUsageService,
   ) {}
 
   private manualAccessForBinding(
@@ -99,6 +101,7 @@ export class InstagramMessageSendService {
   async sendDirect(
     input: SendDirectInstagramMessageInput,
   ): Promise<InstagramMessageSendResult> {
+    await this.myahUsage.assertCanAct(input.workspaceId);
     const actionKind = await this.authorityReader.getDraftActionKind({
       workspaceId: input.workspaceId,
       draftId: input.draftId,
@@ -181,6 +184,7 @@ export class InstagramMessageSendService {
       { actionName: 'send_instagram_message' }
     >,
   ): Promise<InstagramMessageSendResult> {
+    await this.myahUsage.assertCanAct(input.workspaceId);
     if (
       input.workspaceId !== binding.workspaceId ||
       input.initiatorUserWorkspaceId !== binding.initiatorUserWorkspaceId ||

@@ -39,6 +39,7 @@ describe('MessagingMessageOutboundService sendability assertion', () => {
       assertSendable: assertEmailGroupSendable,
       providerRequestTimeoutMs: OUTBOUND_EMAIL_PROVIDER_REQUEST_TIMEOUT_MS,
     } as unknown as EmailGroupMessageOutboundService,
+    { assertCanAct: jest.fn() } as never,
   );
 
   beforeEach(() => {
@@ -97,6 +98,7 @@ describe('MessagingMessageOutboundService deleteDraft', () => {
       deleteDraft: deleteImapDraft,
     } as unknown as ImapSmtpMessageOutboundService,
     {} as EmailGroupMessageOutboundService,
+    { assertCanAct: jest.fn() } as never,
   );
 
   beforeEach(() => {

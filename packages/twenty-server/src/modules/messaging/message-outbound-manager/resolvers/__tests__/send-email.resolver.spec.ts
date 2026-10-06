@@ -68,6 +68,7 @@ const makeHarness = (messageChannelId: string | null = channelId) => {
       getSentMessageThreadId: jest.fn(),
     } as never,
     { verifyCreatorOrigin, recordAcceptedSend, bindThreadCreator } as never,
+    { assertCanAct: jest.fn() } as never,
   );
   const input = {
     connectedAccountId: accountId,

@@ -162,6 +162,7 @@ const buildHarness = (
       messageProjectionWriter as never,
       permissionService as never,
       recordAccessService as never,
+      { assertCanAct: jest.fn() } as never,
     ),
   };
 };
@@ -1775,6 +1776,7 @@ describe('InstagramMessageSendService durable v3 acceptance replay', () => {
         h.writer,
         permission as never,
         h.access,
+        { assertCanAct: jest.fn() } as never,
       );
       // Simulate the workspace projection commit followed by loss before receipt SENT.
       await expect(

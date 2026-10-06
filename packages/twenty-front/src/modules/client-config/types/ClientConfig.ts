@@ -27,6 +27,7 @@ export type ClientConfig = {
   isAttachmentPreviewEnabled: boolean;
   isConfigVariablesInDbEnabled: boolean;
   isEmailVerificationRequired: boolean;
+  isMyahSubscriptionRequired: boolean;
   isGoogleCalendarEnabled: boolean;
   isGoogleMessagingEnabled: boolean;
   isMicrosoftCalendarEnabled: boolean;

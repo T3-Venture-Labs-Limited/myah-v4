@@ -70,6 +70,9 @@ import { LegacyCampaignSequenceCleanupWorkspaceService } from 'src/modules/myah-
 import { WorkflowCommonModule } from 'src/modules/workflow/common/workflow-common.module';
 import { WorkflowTriggerModule } from 'src/modules/workflow/workflow-trigger/workflow-trigger.module';
 import { QueueWorkerModule } from 'src/queue-worker/queue-worker.module';
+import { MyahSubscriptionModule } from 'src/engine/core-modules/myah-subscription/myah-subscription.module';
+import { MyahUsageService } from 'src/engine/core-modules/myah-subscription/myah-usage.service';
+import { MyahWorkspaceAccessService } from 'src/engine/core-modules/myah-subscription/myah-workspace-access.service';
 
 const dataSource = {
   entityMetadatas: [],
@@ -158,6 +161,16 @@ class InstagramMessageTestModule {}
 })
 class MyahAgentTestModule {}
 
+// Subscription access is tested in its own module; keep billing out of this graph.
+@Module({
+  providers: [
+    { provide: MyahWorkspaceAccessService, useValue: {} },
+    { provide: MyahUsageService, useValue: {} },
+  ],
+  exports: [MyahWorkspaceAccessService, MyahUsageService],
+})
+class MyahSubscriptionTestModule {}
+
 describe('CampaignExecutionOrchestrationModule', () => {
   it('registers with the runtime HTTP, GraphQL, and worker composition roots', () => {
     expect(
@@ -178,6 +191,7 @@ describe('CampaignExecutionOrchestrationModule', () => {
         CampaignExecutionOrchestrationModule,
       ),
     ).toEqual([
+      MyahSubscriptionModule,
       CampaignExecutionModule,
       CampaignSequenceAuthorityModule,
       MyahInboxContactTriageModule,
@@ -208,6 +222,8 @@ describe('CampaignExecutionOrchestrationModule', () => {
       .useModule(InstagramMessageTestModule)
       .overrideModule(MyahAgentModule)
       .useModule(MyahAgentTestModule)
+      .overrideModule(MyahSubscriptionModule)
+      .useModule(MyahSubscriptionTestModule)
       .overrideModule(MyahInboxContactTriageModule)
       .useModule(TriageTestModule)
       .overrideModule(EmailingModule)

@@ -6,6 +6,10 @@ import { ConnectedAccountProvider } from 'twenty-shared/types';
 
 import { EmailConnectionSecurity } from 'src/engine/core-modules/imap-smtp-caldav-connection/enums/email-connection-security.enum';
 import { type ConnectedAccountEntity } from 'src/engine/metadata-modules/connected-account/entities/connected-account.entity';
+import {
+  AiException,
+  AiExceptionCode,
+} from 'src/engine/metadata-modules/ai/ai.exception';
 import { OutboundEmailAttemptService } from 'src/modules/campaign-execution/services/outbound-email-attempt.service';
 import {
   type AttemptOutcomeResult,
@@ -148,6 +152,30 @@ const isIntrinsicErrorStackDescriptor = (
   descriptor.set === intrinsicErrorStackDescriptor.set &&
   descriptor.enumerable === intrinsicErrorStackDescriptor.enumerable &&
   descriptor.configurable === intrinsicErrorStackDescriptor.configurable;
+
+// sendMessage checks workspace access before any provider call, so this refusal
+// proves the email was not sent. Only a direct AiException with a plain `code`
+// value qualifies; no prototype walk or getter runs on provider-shaped errors.
+const isMyahSubscriptionRefusal = (error: unknown): boolean => {
+  try {
+    if (
+      typeof error !== 'object' ||
+      error === null ||
+      nodeUtilTypes.isProxy(error) ||
+      Object.getPrototypeOf(error) !== AiException.prototype
+    )
+      return false;
+    const code = Object.getOwnPropertyDescriptor(error, 'code');
+
+    return (
+      code !== undefined &&
+      'value' in code &&
+      code.value === AiExceptionCode.SUBSCRIPTION_REQUIRED
+    );
+  } catch {
+    return false;
+  }
+};
 
 const isTrapSafeClassifierInput = (value: unknown): boolean => {
   if (value === null || typeof value !== 'object') return true;
@@ -1810,6 +1838,7 @@ const isRecorded = (
 
 const FINAL_AUTHORITY_REJECTION_REASONS =
   new Set<FinalSubmissionAuthorityRejectionReason>([
+    'SUBSCRIPTION_REQUIRED',
     'WORKSPACE_NOT_ACTIVE',
     'CAMPAIGN_PAUSED',
     'CAMPAIGN_STOPPED',
@@ -2184,6 +2213,7 @@ export class OutboundEmailDispatchService {
       } catch {
         rejected = false;
       }
+      rejected ||= isMyahSubscriptionRefusal(error);
       if (rejected) {
         return this.persistDefiniteOutcome({
           kind: 'DEFINITELY_UNACCEPTED_EVIDENCE',

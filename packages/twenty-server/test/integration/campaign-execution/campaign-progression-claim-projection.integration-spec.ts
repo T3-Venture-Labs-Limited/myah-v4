@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { DataSource } from 'typeorm';
+import { DataSource, type DataSourceOptions } from 'typeorm';
+import { typeORMCoreModuleOptions } from 'src/database/typeorm/core/core.datasource';
+import { AddMyahSubscriptionCampaignHoldFastInstanceCommand } from 'src/database/commands/upgrade-version-command/2-20/2-20-instance-command-fast-1791224189942-add-myah-subscription-campaign-hold';
+import { MyahWorkspaceAccessService } from 'src/engine/core-modules/myah-subscription/myah-workspace-access.service';
+import { MyahWorkspaceSubscriptionEntity } from 'src/engine/core-modules/myah-subscription/entities/myah-workspace-subscription.entity';
+import { WorkspaceScopedRepository } from 'src/engine/twenty-orm/workspace-scoped-repository/workspace-scoped-repository';
 
 jest.mock(
   'src/modules/myah-outreach/services/campaign-message-render.service',
@@ -139,13 +144,29 @@ describe('Campaign progression retained PostgreSQL claim/projection', () => {
   let dataSource: DataSource;
   let attemptService: OutboundEmailAttemptService;
   let service: CampaignProgressionService;
+  let access: MyahWorkspaceAccessService;
   let attemptId: string;
   let reservationLocalDate: string;
 
   beforeAll(async () => {
     dataSource = await new DataSource(
-      global.testDataSource.options,
+      typeORMCoreModuleOptions as DataSourceOptions,
     ).initialize();
+    await dataSource.transaction(async (manager) => {
+      await new AddMyahSubscriptionCampaignHoldFastInstanceCommand().up(
+        manager.queryRunner!,
+      );
+    });
+    access = new MyahWorkspaceAccessService(
+      new WorkspaceScopedRepository(
+        dataSource.getRepository(MyahWorkspaceSubscriptionEntity),
+      ),
+      {
+        get: (key: string) =>
+          key === 'MYAH_SUBSCRIPTION_REQUIRED' ? true : [],
+      } as never,
+      { get: jest.fn(), set: jest.fn(), incrBy: jest.fn() } as never,
+    );
     const capacity = new MailboxCapacityService();
     reservationLocalDate = new Date().toISOString().slice(0, 10);
     const capacityResult = () => {
@@ -205,6 +226,7 @@ describe('Campaign progression retained PostgreSQL claim/projection', () => {
       });
     attemptService = new OutboundEmailAttemptService(capacity);
     service = new CampaignProgressionService(
+      access,
       attemptService,
       capacity,
       sequence as never,
@@ -354,6 +376,61 @@ describe('Campaign progression retained PostgreSQL claim/projection', () => {
   });
 
   afterAll(async () => dataSource.destroy());
+
+  it('holds a due occurrence while lapsed without reserving or rendering, then restores access for the following claim and send', async () => {
+    await access.saveSubscription(id.workspace, {
+      stripeStatus: 'canceled',
+      hadPaidSubscription: true,
+    });
+    await expect(
+      dataSource.transaction((manager) =>
+        service.claimAndReserveDueOccurrenceInTransaction(
+          {
+            workspaceId: id.workspace,
+            campaignId: id.campaign,
+            occurrenceId: id.occurrence,
+          },
+          manager as never,
+        ),
+      ),
+    ).resolves.toEqual({ status: 'HELD', reason: 'SUBSCRIPTION_REQUIRED' });
+    expect(
+      await dataSource.query(
+        'SELECT state, "holdReason" FROM core."campaignOccurrence" WHERE id=$1',
+        [id.occurrence],
+      ),
+    ).toEqual([{ state: 'HELD', holdReason: 'SUBSCRIPTION_REQUIRED' }]);
+    expect(
+      await dataSource.query(
+        'SELECT state, "holdReason" FROM core."campaignEnrollment" WHERE id=$1',
+        [id.enrollment],
+      ),
+    ).toEqual([{ state: 'ACTIVE', holdReason: 'SUBSCRIPTION_REQUIRED' }]);
+    expect(
+      await dataSource.query(
+        'SELECT "attemptId" FROM core."outboundEmailAttempt" WHERE "workspaceId"=$1',
+        [id.workspace],
+      ),
+    ).toEqual([]);
+    expect(render.renderSequenceEmail).not.toHaveBeenCalled();
+    await expect(
+      dataSource.transaction((manager) =>
+        new AddMyahSubscriptionCampaignHoldFastInstanceCommand().down(
+          manager.queryRunner!,
+        ),
+      ),
+    ).rejects.toThrow('Cannot remove retained subscription hold evidence');
+    // Applying the additive schema again preserves held evidence.
+    await dataSource.transaction((manager) =>
+      new AddMyahSubscriptionCampaignHoldFastInstanceCommand().up(
+        manager.queryRunner!,
+      ),
+    );
+    await access.saveSubscription(id.workspace, {
+      stripeStatus: 'active',
+      hadPaidSubscription: true,
+    });
+  });
 
   it('serializes competing full-coordinate claims to one reservation and one dispatchable result', async () => {
     const claim = () =>

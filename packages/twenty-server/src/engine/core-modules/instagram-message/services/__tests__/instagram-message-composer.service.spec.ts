@@ -2716,6 +2716,7 @@ const buildComposedSendHarness = async (route: 'START_CHAT' | 'REPLY') => {
         {} as never,
         permission,
         access,
+        { assertCanAct: jest.fn() } as never,
       ),
     );
   const composer = createComposer();

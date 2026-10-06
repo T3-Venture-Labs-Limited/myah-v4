@@ -1,4 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import {
+  MyahWorkspaceAccess,
+  MyahWorkspaceAccessService,
+} from 'src/engine/core-modules/myah-subscription/myah-workspace-access.service';
 import { type EntityManager, type QueryRunner } from 'typeorm';
 
 import { campaignMailboxAdvisoryKeys } from 'src/engine/core-modules/campaign-execution/services/campaign-mailbox-deletion-fence.service';
@@ -61,6 +65,7 @@ const recipient = (value: string | string[]): string | null => {
 @Injectable()
 export class CampaignFinalSubmissionAuthorityAdapter implements FinalSubmissionAuthorityRevalidator {
   constructor(
+    private readonly myahAccess: MyahWorkspaceAccessService,
     private readonly audience: CampaignOutreachAudienceReviewService,
     private readonly senderReadiness: CampaignSenderReadinessService,
     private readonly sequence: CampaignSequenceService,
@@ -110,6 +115,14 @@ export class CampaignFinalSubmissionAuthorityAdapter implements FinalSubmissionA
       workspace[0].deletedAt !== null
     )
       return reject('WORKSPACE_NOT_ACTIVE');
+
+    if (
+      [
+        MyahWorkspaceAccess.NEEDS_SUBSCRIPTION,
+        MyahWorkspaceAccess.LAPSED,
+      ].includes(await this.myahAccess.getAccess(submission.workspaceId))
+    )
+      return reject('SUBSCRIPTION_REQUIRED');
 
     await runner.query(
       `SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))`,

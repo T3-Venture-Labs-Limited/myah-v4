@@ -56,9 +56,15 @@ jest.mock('@/ui/feedback/snack-bar-manager/hooks/useSnackBar', () => ({
   useSnackBar: () => ({ enqueueErrorSnackBar: jest.fn() }),
 }));
 
-jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue', () => ({
-  useAtomStateValue: () => ({ id: 'workspace-1' }),
-}));
+jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue', () => {
+  const { isMyahSubscriptionRequiredState } = jest.requireActual(
+    '@/client-config/states/isMyahSubscriptionRequiredState',
+  );
+  return {
+    useAtomStateValue: (state: unknown) =>
+      state === isMyahSubscriptionRequiredState ? false : { id: 'workspace-1' },
+  };
+});
 
 i18n.load({ [SOURCE_LOCALE]: messages });
 i18n.activate(SOURCE_LOCALE);

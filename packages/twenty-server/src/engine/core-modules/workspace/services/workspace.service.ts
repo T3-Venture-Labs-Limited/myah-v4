@@ -1,4 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { MyahSubscriptionSyncService } from 'src/engine/core-modules/myah-subscription/myah-subscription-sync.service';
+import { UnipileInstagramAccountService } from 'src/modules/myah-unipile/services/unipile-instagram-account.service';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 
 import assert from 'assert';
@@ -148,6 +150,8 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
     private readonly upgradeMigrationService: UpgradeMigrationService,
     private readonly upgradeSequenceReaderService: UpgradeSequenceReaderService,
     private readonly sdkClientGenerationService: SdkClientGenerationService,
+    private readonly myahSubscriptionSyncService: MyahSubscriptionSyncService,
+    private readonly unipileInstagramAccountService: UnipileInstagramAccountService,
   ) {
     super(workspaceRepository);
   }
@@ -497,6 +501,14 @@ export class WorkspaceService extends TypeOrmQueryService<WorkspaceEntity> {
     });
 
     assert(workspace, 'Workspace not found');
+
+    // Keep workspace/member records available if provider cleanup needs recovery.
+    // Billing is cancelled even while the paywall is off (e.g. after a rollback);
+    // a workspace that never opened Checkout has no subscription row and no Stripe call.
+    if (this.twentyConfigService.get('MYAH_SUBSCRIPTION_REQUIRED')) {
+      await this.unipileInstagramAccountService.disconnectWorkspaceAccount(id);
+    }
+    await this.myahSubscriptionSyncService.cancelForWorkspaceDeletion(id);
 
     const userWorkspaces = await this.userWorkspaceRepository.find({
       where: {

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { MyahUsageService } from 'src/engine/core-modules/myah-subscription/myah-usage.service';
 
 import { msg } from '@lingui/core/macro';
 import { type ActorMetadata } from 'twenty-shared/types';
@@ -51,6 +52,7 @@ export class WorkflowRunnerWorkspaceService {
     private readonly workflowThrottlingWorkspaceService: WorkflowThrottlingWorkspaceService,
     private readonly metricsService: MetricsService,
     private readonly workflowOutreachAccessGuardService: WorkflowOutreachAccessGuardService,
+    private readonly myahUsage: MyahUsageService,
   ) {}
 
   async run({
@@ -70,6 +72,7 @@ export class WorkflowRunnerWorkspaceService {
       { workflowVersionId, workspaceId },
     );
 
+    await this.myahUsage.assertCanAct(workspaceId);
     const canFeatureBeUsed =
       await this.billingUsageService.canFeatureBeUsed(workspaceId);
 
@@ -133,6 +136,7 @@ export class WorkflowRunnerWorkspaceService {
       { workflowRunId, workspaceId },
     );
 
+    await this.myahUsage.assertCanAct(workspaceId);
     await this.messageQueueService.add<RunWorkflowJobData>(
       RunWorkflowJob.name,
       {
@@ -158,6 +162,7 @@ export class WorkflowRunnerWorkspaceService {
       { workflowRunId, workspaceId },
     );
 
+    await this.myahUsage.assertCanAct(workspaceId);
     const workflowRun =
       await this.workflowRunWorkspaceService.getWorkflowRunOrFail({
         workflowRunId,
@@ -328,6 +333,7 @@ export class WorkflowRunnerWorkspaceService {
     await this.workflowOutreachAccessGuardService.assertGenericWorkflowRunMutationAllowed(
       { workflowRunId, workspaceId },
     );
+    await this.myahUsage.assertCanAct(workspaceId);
 
     const workflowRun =
       await this.workflowRunWorkspaceService.getWorkflowRunOrFail({

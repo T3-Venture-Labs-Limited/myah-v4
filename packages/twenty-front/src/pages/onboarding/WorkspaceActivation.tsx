@@ -8,7 +8,6 @@ import { Title } from '@/auth/components/Title';
 import { currentWorkspaceState } from '@/auth/states/currentWorkspaceState';
 import { isCreatingWorkspaceState } from '@/auth/states/isCreatingWorkspaceState';
 import { OnboardingStepAnimatedItem } from '@/onboarding/components/OnboardingStepAnimatedItem';
-import { useSetNextOnboardingStatus } from '@/onboarding/hooks/useSetNextOnboardingStatus';
 import { onboardingActivationFailedState } from '@/onboarding/states/onboardingActivationFailedState';
 import { onboardingFreeCreditsState } from '@/onboarding/states/onboardingFreeCreditsState';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
@@ -42,7 +41,6 @@ const StyledButtonContainer = styled.div`
 export const WorkspaceActivation = () => {
   const { t } = useLingui();
   const { enqueueErrorSnackBar } = useSnackBar();
-  const setNextOnboardingStatus = useSetNextOnboardingStatus();
   const { loadCurrentUser } = useLoadCurrentUser();
   const [activateWorkspace, { loading: isActivating }] = useMutation(
     ActivateWorkspaceDocument,
@@ -76,7 +74,6 @@ export const WorkspaceActivation = () => {
 
       setIsAppEffectRedirectEnabled(false);
       await loadCurrentUser();
-      setNextOnboardingStatus();
       setIsCreatingWorkspace(false);
       setIsAppEffectRedirectEnabled(true);
     } catch (error) {
@@ -95,7 +92,6 @@ export const WorkspaceActivation = () => {
     setOnboardingActivationFailed,
     setIsAppEffectRedirectEnabled,
     setIsCreatingWorkspace,
-    setNextOnboardingStatus,
   ]);
 
   // Guard the one-shot trigger with a ref, not state: a ref mutation is

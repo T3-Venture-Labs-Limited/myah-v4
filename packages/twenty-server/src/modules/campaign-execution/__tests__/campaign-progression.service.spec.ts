@@ -62,7 +62,9 @@ const projectAttemptLikeQueueWorker = (
 
 describe('CampaignProgressionService', () => {
   it('rejects a manager that is not the active transaction owner', async () => {
-    const service = new CampaignProgressionService();
+    const service = new CampaignProgressionService({
+      getAccess: jest.fn(async () => 'ACTIVE'),
+    } as never);
     await expect(
       service.markUnknownInTransaction('occurrence', {
         queryRunner: { isTransactionActive: false },
@@ -70,159 +72,175 @@ describe('CampaignProgressionService', () => {
     ).rejects.toThrow('supplied active manager');
   });
 
-  it('locks untrusted workspace and Campaign coordinates before exact occurrence scope', async () => {
-    const workspaceId = '20202020-1111-4111-8111-111111111111';
-    const campaignId = '20202020-2222-4222-8222-222222222222';
-    const occurrenceId = '20202020-3333-4333-8333-333333333333';
-    const enrollmentId = '20202020-4444-4444-8444-444444444444';
-    const authorizationId = '20202020-5555-4555-8555-555555555555';
-    const workflowVersionId = '20202020-6666-4666-8666-666666666666';
-    const campaignExecutionId = '20202020-7777-4777-8777-777777777777';
-    const query = jest.fn(async (sql: string) => {
-      if (sql.includes('FROM core.workspace'))
-        return [
-          { activationStatus: 'INACTIVE', suspendedAt: null, deletedAt: null },
-        ];
-      if (sql.includes('.campaign WHERE'))
-        return [
-          {
-            id: campaignId,
-            lifecycleStatus: 'ACTIVE',
-            sequenceAuthorization: {
-              authorizationId,
-              generation: 1,
-              workflowVersionId,
+  it.each(['WORKSPACE_NOT_ACTIVE', 'SUBSCRIPTION_REQUIRED'] as const)(
+    'locks coordinates and releases reserved capacity before holding for %s',
+    async (reason) => {
+      const workspaceId = '20202020-1111-4111-8111-111111111111';
+      const campaignId = '20202020-2222-4222-8222-222222222222';
+      const occurrenceId = '20202020-3333-4333-8333-333333333333';
+      const enrollmentId = '20202020-4444-4444-8444-444444444444';
+      const authorizationId = '20202020-5555-4555-8555-555555555555';
+      const workflowVersionId = '20202020-6666-4666-8666-666666666666';
+      const campaignExecutionId = '20202020-7777-4777-8777-777777777777';
+      const query = jest.fn(async (sql: string) => {
+        if (sql.includes('FROM core.workspace'))
+          return [
+            {
+              activationStatus:
+                reason === 'WORKSPACE_NOT_ACTIVE' ? 'INACTIVE' : 'ACTIVE',
+              suspendedAt: null,
+              deletedAt: null,
             },
-          },
-        ];
-      if (sql.includes('campaignSequenceAuthorization'))
-        return [{ authorizationId }];
-      if (sql.includes('campaignActivation')) return [{ campaignExecutionId }];
-      if (sql.includes('SELECT "enrollmentId"')) return [{ enrollmentId }];
-      if (sql.includes('campaignEnrollment') && sql.includes('SELECT'))
-        return [
-          {
-            id: enrollmentId,
-            state: 'ACTIVE',
-            holdReason: null,
-            nextAuthoredMessageIndex: 0,
-          },
-        ];
-      if (sql.includes('campaignOccurrence') && sql.includes('SELECT'))
-        return [
-          {
-            id: occurrenceId,
-            enrollmentId,
-            state: 'PENDING',
-            authoredMessageIndex: 0,
-            dueAt: new Date(0),
-          },
-        ];
-      if (sql.includes('outboundEmailAttempt'))
-        return [
-          {
-            attemptId: '20202020-dddd-4ddd-8ddd-dddddddddddd',
-            source: 'CAMPAIGN_SEQUENCE',
-            attemptState: 'BLOCKED',
-            capacityState: 'RELEASED',
-          },
-          {
-            attemptId: ids.attemptId,
-            attemptNumber: 1,
-            authorizationId,
-            campaignId,
-            claimedAt: new Date('2026-09-11T00:00:00Z'),
-            connectedAccountId: ids.connectedAccountId,
-            enrollmentId,
-            localDate,
-            messageChannelId: ids.messageChannelId,
-            messageId: '20202020-cccc-4ccc-8ccc-cccccccccccc',
-            normalizedRecipient: 'recipient@example.com',
-            normalizedSenderHandle: 'sender@example.com',
-            occurrenceId,
-            priorAcceptedEvidenceId: null,
-            provider: 'google',
-            renderDigest: 'a'.repeat(64),
-            selectionConstraintKind: 'ROTATE',
-            senderPoolFingerprint: 'b'.repeat(64),
-            slotAt: new Date('2026-09-11T00:00:01Z'),
-            source: 'CAMPAIGN_SEQUENCE',
-            attemptState: 'RESERVED',
-            capacityState: 'RESERVED',
-            unknownAfter: new Date('2026-09-11T00:01:00Z'),
-            workflowVersionId,
-            workspaceId,
-          },
-        ].map((row) => projectAttemptLikeQueueWorker(sql, row));
-      if (sql.includes('clock_timestamp() AS'))
-        return [{ observedAt: new Date() }];
-      return [];
-    });
-    const blockReservedAttemptBeforeProvider = jest
-      .fn()
-      .mockResolvedValueOnce({ status: 'RECORDED' })
-      .mockResolvedValueOnce({ status: 'STATE_CONFLICT' });
-    const service = new CampaignProgressionService({
-      blockReservedAttemptBeforeProvider,
-    } as never);
+          ];
+        if (sql.includes('.campaign WHERE'))
+          return [
+            {
+              id: campaignId,
+              lifecycleStatus: 'ACTIVE',
+              sequenceAuthorization: {
+                authorizationId,
+                generation: 1,
+                workflowVersionId,
+              },
+            },
+          ];
+        if (sql.includes('campaignSequenceAuthorization'))
+          return [{ authorizationId }];
+        if (sql.includes('campaignActivation'))
+          return [{ campaignExecutionId }];
+        if (sql.includes('SELECT "enrollmentId"')) return [{ enrollmentId }];
+        if (sql.includes('campaignEnrollment') && sql.includes('SELECT'))
+          return [
+            {
+              id: enrollmentId,
+              state: 'ACTIVE',
+              holdReason: null,
+              nextAuthoredMessageIndex: 0,
+            },
+          ];
+        if (sql.includes('campaignOccurrence') && sql.includes('SELECT'))
+          return [
+            {
+              id: occurrenceId,
+              enrollmentId,
+              state: 'PENDING',
+              authoredMessageIndex: 0,
+              dueAt: new Date(0),
+            },
+          ];
+        if (sql.includes('outboundEmailAttempt'))
+          return [
+            {
+              attemptId: '20202020-dddd-4ddd-8ddd-dddddddddddd',
+              source: 'CAMPAIGN_SEQUENCE',
+              attemptState: 'BLOCKED',
+              capacityState: 'RELEASED',
+            },
+            {
+              attemptId: ids.attemptId,
+              attemptNumber: 1,
+              authorizationId,
+              campaignId,
+              claimedAt: new Date('2026-09-11T00:00:00Z'),
+              connectedAccountId: ids.connectedAccountId,
+              enrollmentId,
+              localDate,
+              messageChannelId: ids.messageChannelId,
+              messageId: '20202020-cccc-4ccc-8ccc-cccccccccccc',
+              normalizedRecipient: 'recipient@example.com',
+              normalizedSenderHandle: 'sender@example.com',
+              occurrenceId,
+              priorAcceptedEvidenceId: null,
+              provider: 'google',
+              renderDigest: 'a'.repeat(64),
+              selectionConstraintKind: 'ROTATE',
+              senderPoolFingerprint: 'b'.repeat(64),
+              slotAt: new Date('2026-09-11T00:00:01Z'),
+              source: 'CAMPAIGN_SEQUENCE',
+              attemptState: 'RESERVED',
+              capacityState: 'RESERVED',
+              unknownAfter: new Date('2026-09-11T00:01:00Z'),
+              workflowVersionId,
+              workspaceId,
+            },
+          ].map((row) => projectAttemptLikeQueueWorker(sql, row));
+        if (sql.includes('clock_timestamp() AS'))
+          return [{ observedAt: new Date() }];
+        return [];
+      });
+      const blockReservedAttemptBeforeProvider = jest
+        .fn()
+        .mockResolvedValueOnce({ status: 'RECORDED' })
+        .mockResolvedValueOnce({ status: 'STATE_CONFLICT' });
+      const service = new CampaignProgressionService(
+        { getAccess: jest.fn(async () => 'LAPSED') } as never,
+        {
+          blockReservedAttemptBeforeProvider,
+        } as never,
+      );
 
-    await expect(
-      service.claimAndReserveDueOccurrenceInTransaction(
-        { workspaceId, campaignId, occurrenceId },
-        managerWith(query) as never,
-      ),
-    ).resolves.toEqual({ status: 'HELD', reason: 'WORKSPACE_NOT_ACTIVE' });
-    const sql = query.mock.calls.map(([statement]) => statement);
-    expect(sql[0]).toContain('core.workspace');
-    expect(sql[1]).toContain('pg_advisory_xact_lock');
-    expect(sql[2]).toContain('.campaign');
-    expect(sql[5]).toContain('campaignOccurrence');
-    expect(sql[5]).not.toContain('FOR UPDATE');
-    expect(query.mock.calls.map(([sql]) => sql).join('\n')).not.toContain(
-      'INSERT INTO core."outboundEmailAttempt"',
-    );
-    expect(blockReservedAttemptBeforeProvider).toHaveBeenCalledWith(
-      expect.objectContaining({
-        reason: 'WORKSPACE_NOT_ACTIVE',
-        reservation: expect.objectContaining({ localDate }),
-      }),
-      expect.anything(),
-    );
+      await expect(
+        service.claimAndReserveDueOccurrenceInTransaction(
+          { workspaceId, campaignId, occurrenceId },
+          managerWith(query) as never,
+        ),
+      ).resolves.toEqual({ status: 'HELD', reason });
+      const sql = query.mock.calls.map(([statement]) => statement);
+      expect(sql[0]).toContain('core.workspace');
+      expect(sql[1]).toContain('pg_advisory_xact_lock');
+      expect(sql[2]).toContain('.campaign');
+      expect(sql[5]).toContain('campaignOccurrence');
+      expect(sql[5]).not.toContain('FOR UPDATE');
+      expect(query.mock.calls.map(([sql]) => sql).join('\n')).not.toContain(
+        'INSERT INTO core."outboundEmailAttempt"',
+      );
+      expect(blockReservedAttemptBeforeProvider).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reason,
+          reservation: expect.objectContaining({ localDate }),
+        }),
+        expect.anything(),
+      );
 
-    await expect(
-      service.claimAndReserveDueOccurrenceInTransaction(
-        { workspaceId, campaignId, occurrenceId },
-        managerWith(query) as never,
-      ),
-    ).rejects.toThrow('Campaign inactive-workspace reservation block failed');
-    expect(blockReservedAttemptBeforeProvider).toHaveBeenCalledTimes(2);
-    expect(
-      query.mock.calls.filter(([statement]) =>
-        String(statement).includes('UPDATE core."campaignOccurrence"'),
-      ),
-    ).toHaveLength(1);
+      await expect(
+        service.claimAndReserveDueOccurrenceInTransaction(
+          { workspaceId, campaignId, occurrenceId },
+          managerWith(query) as never,
+        ),
+      ).rejects.toThrow('Campaign inactive-workspace reservation block failed');
+      expect(blockReservedAttemptBeforeProvider).toHaveBeenCalledTimes(2);
+      expect(
+        query.mock.calls.filter(([statement]) =>
+          String(statement).includes('UPDATE core."campaignOccurrence"'),
+        ),
+      ).toHaveLength(1);
 
-    await expect(
-      new CampaignProgressionService().claimAndReserveDueOccurrenceInTransaction(
-        { workspaceId, campaignId, occurrenceId },
-        managerWith(query) as never,
-      ),
-    ).rejects.toThrow(
-      'Campaign inactive-workspace attempt service unavailable',
-    );
-    expect(
-      query.mock.calls.filter(([statement]) =>
-        String(statement).includes('UPDATE core."campaignOccurrence"'),
-      ),
-    ).toHaveLength(1);
-  });
+      await expect(
+        new CampaignProgressionService({
+          getAccess: jest.fn(async () => 'LAPSED'),
+        } as never).claimAndReserveDueOccurrenceInTransaction(
+          { workspaceId, campaignId, occurrenceId },
+          managerWith(query) as never,
+        ),
+      ).rejects.toThrow(
+        'Campaign inactive-workspace attempt service unavailable',
+      );
+      expect(
+        query.mock.calls.filter(([statement]) =>
+          String(statement).includes('UPDATE core."campaignOccurrence"'),
+        ),
+      ).toHaveLength(1);
+    },
+  );
 
   it('uses a lock followed by a state CAS for typed holds', async () => {
     const query = jest
       .fn()
       .mockResolvedValueOnce([{ id: 'occurrence', state: 'PENDING' }])
       .mockResolvedValueOnce([{ id: 'occurrence', workspaceId: 'workspace' }]);
-    const service = new CampaignProgressionService();
+    const service = new CampaignProgressionService({
+      getAccess: jest.fn(async () => 'ACTIVE'),
+    } as never);
 
     await expect(
       service.holdOccurrenceInTransaction(
@@ -300,6 +318,7 @@ describe('CampaignProgressionService', () => {
     });
     const writer = { writeInTransaction: jest.fn() };
     const service = new CampaignProgressionService(
+      { getAccess: jest.fn(async () => 'ACTIVE') } as never,
       undefined,
       undefined,
       undefined,
@@ -352,7 +371,9 @@ describe('CampaignProgressionService', () => {
         attemptsResolved: false,
       },
     ]);
-    const service = new CampaignProgressionService();
+    const service = new CampaignProgressionService({
+      getAccess: jest.fn(async () => 'ACTIVE'),
+    } as never);
 
     await expect(
       service.canCompleteInTransaction(
@@ -370,7 +391,9 @@ describe('CampaignProgressionService', () => {
     'rejects invalid claim %s without SQL',
     async (field) => {
       const query = jest.fn();
-      const service = new CampaignProgressionService();
+      const service = new CampaignProgressionService({
+        getAccess: jest.fn(async () => 'ACTIVE'),
+      } as never);
 
       await expect(
         service.claimAndReserveDueOccurrenceInTransaction(
@@ -398,7 +421,9 @@ describe('CampaignProgressionService', () => {
     'rejects invalid reconcile %s without SQL or mutation',
     async (field) => {
       const query = jest.fn();
-      const service = new CampaignProgressionService();
+      const service = new CampaignProgressionService({
+        getAccess: jest.fn(async () => 'ACTIVE'),
+      } as never);
 
       await expect(
         service.reconcileAcceptedInTransaction(
@@ -533,16 +558,21 @@ describe('CampaignProgressionService', () => {
         if (sql.includes('UPDATE')) return [{ id: ids.occurrenceId }];
         return [];
       });
-      const service = new CampaignProgressionService(undefined, undefined, {
-        loadExecutionPlanInTransaction: async () => ({
-          kind: 'READY',
-          delaysSeconds: [120],
-          nodes: [
-            { messageId: ids.occurrenceId, channel: 'EMAIL' },
-            { messageId: ids.creatorId, channel: 'EMAIL' },
-          ],
-        }),
-      } as never);
+      const service = new CampaignProgressionService(
+        { getAccess: jest.fn(async () => 'ACTIVE') } as never,
+        undefined,
+        undefined,
+        {
+          loadExecutionPlanInTransaction: async () => ({
+            kind: 'READY',
+            delaysSeconds: [120],
+            nodes: [
+              { messageId: ids.occurrenceId, channel: 'EMAIL' },
+              { messageId: ids.creatorId, channel: 'EMAIL' },
+            ],
+          }),
+        } as never,
+      );
       const result = service.reconcileAcceptedInTransaction(
         routing,
         managerWith(query) as never,
@@ -593,6 +623,7 @@ describe('CampaignProgressionService', () => {
     });
     const writer = { writeInTransaction: jest.fn() };
     const service = new CampaignProgressionService(
+      { getAccess: jest.fn(async () => 'ACTIVE') } as never,
       undefined,
       undefined,
       undefined,
@@ -686,6 +717,7 @@ describe('CampaignProgressionService', () => {
       .mockResolvedValueOnce([]);
     const writer = { writeInTransaction: jest.fn() };
     const service = new CampaignProgressionService(
+      { getAccess: jest.fn(async () => 'ACTIVE') } as never,
       undefined,
       undefined,
       undefined,
@@ -731,7 +763,9 @@ describe('CampaignProgressionService', () => {
       const query = jest
         .fn()
         .mockResolvedValue(Array.isArray(row) ? row : [row]);
-      const service = new CampaignProgressionService();
+      const service = new CampaignProgressionService({
+        getAccess: jest.fn(async () => 'ACTIVE'),
+      } as never);
 
       await expect(
         service.inspectDispatchableReservationInTransaction(
@@ -828,6 +862,7 @@ describe('CampaignProgressionService', () => {
     });
     const writer = { writeInTransaction: jest.fn() };
     const service = new CampaignProgressionService(
+      { getAccess: jest.fn(async () => 'ACTIVE') } as never,
       {} as never,
       {} as never,
       {
@@ -1028,6 +1063,7 @@ describe('CampaignProgressionService', () => {
         ),
       };
       const service = new CampaignProgressionService(
+        { getAccess: jest.fn(async () => 'ACTIVE') } as never,
         branch === 'inactive workspace' ||
           branch === 'missing dispatch services'
           ? undefined
@@ -1241,6 +1277,7 @@ describe('CampaignProgressionService', () => {
       );
       const writer = { writeInTransaction: jest.fn() };
       const service = new CampaignProgressionService(
+        { getAccess: jest.fn(async () => 'ACTIVE') } as never,
         {
           reserveWithMailboxCapacity: jest
             .fn()
@@ -1416,6 +1453,7 @@ describe('CampaignProgressionService', () => {
       return [];
     });
     const service = new CampaignProgressionService(
+      { getAccess: jest.fn(async () => 'ACTIVE') } as never,
       {} as never,
       {} as never,
       {
@@ -1700,6 +1738,7 @@ describe('CampaignProgressionService', () => {
       .spyOn(MessagingMessageOutboundService.prototype, 'sendMessage')
       .mockRejectedValue(new Error('Provider network I/O is forbidden'));
     const service = new CampaignProgressionService(
+      { getAccess: jest.fn(async () => 'ACTIVE') } as never,
       attemptService as never,
       capacityService as never,
       sequenceService,
@@ -1821,6 +1860,7 @@ describe('CampaignProgressionService', () => {
     const render = { renderSequenceEmail: jest.fn() };
     const reserve = { reserveAttempt: jest.fn() };
     const service = new CampaignProgressionService(
+      { getAccess: jest.fn(async () => 'ACTIVE') } as never,
       reserve as never,
       undefined,
       undefined,
@@ -1914,9 +1954,12 @@ describe('CampaignProgressionService', () => {
       if (sql.includes('clock_timestamp')) return [{ observedAt: new Date() }];
       return [];
     });
-    const service = new CampaignProgressionService({
-      blockReservedAttemptBeforeProvider,
-    } as never);
+    const service = new CampaignProgressionService(
+      { getAccess: jest.fn(async () => 'ACTIVE') } as never,
+      {
+        blockReservedAttemptBeforeProvider,
+      } as never,
+    );
 
     await expect(
       service.claimAndReserveDueOccurrenceInTransaction(
@@ -2013,9 +2056,12 @@ describe('CampaignProgressionService', () => {
         return [];
       };
       const query = jest.fn(queryImplementation);
-      const service = new CampaignProgressionService({
-        blockReservedAttemptBeforeProvider,
-      } as never);
+      const service = new CampaignProgressionService(
+        { getAccess: jest.fn(async () => 'ACTIVE') } as never,
+        {
+          blockReservedAttemptBeforeProvider,
+        } as never,
+      );
 
       await expect(
         service.cancelBeforeSubmissionInTransaction(
@@ -2090,6 +2136,7 @@ describe('CampaignProgressionService', () => {
       });
       const writer = { writeInTransaction: jest.fn() };
       const service = new CampaignProgressionService(
+        { getAccess: jest.fn(async () => 'ACTIVE') } as never,
         undefined,
         undefined,
         undefined,
@@ -2153,6 +2200,7 @@ describe('CampaignProgressionService', () => {
     });
     const writer = { writeInTransaction: jest.fn() };
     const service = new CampaignProgressionService(
+      { getAccess: jest.fn(async () => 'ACTIVE') } as never,
       undefined,
       undefined,
       undefined,
@@ -2209,6 +2257,7 @@ describe('CampaignProgressionService', () => {
       return [];
     });
     const service = new CampaignProgressionService(
+      { getAccess: jest.fn(async () => 'ACTIVE') } as never,
       undefined,
       undefined,
       undefined,
@@ -2239,7 +2288,9 @@ describe('CampaignProgressionService', () => {
       .fn()
       .mockResolvedValueOnce([{ id: ids.occurrenceId, state: 'IN_FLIGHT' }])
       .mockResolvedValueOnce([{ id: ids.occurrenceId }]);
-    const service = new CampaignProgressionService();
+    const service = new CampaignProgressionService({
+      getAccess: jest.fn(async () => 'ACTIVE'),
+    } as never);
     const manager = managerWith(query);
 
     const result =
@@ -2295,6 +2346,7 @@ describe('CampaignProgressionService', () => {
     });
     const writer = { writeInTransaction: jest.fn() };
     const service = new CampaignProgressionService(
+      { getAccess: jest.fn(async () => 'ACTIVE') } as never,
       undefined,
       undefined,
       undefined,
@@ -2404,7 +2456,9 @@ describe('CampaignProgressionService', () => {
         if (sql.includes('SELECT\n          EXISTS')) return [census];
         return [];
       });
-      const service = new CampaignProgressionService();
+      const service = new CampaignProgressionService({
+        getAccess: jest.fn(async () => 'ACTIVE'),
+      } as never);
 
       await expect(
         service.tryCompleteCampaignInTransaction(
@@ -2472,9 +2526,14 @@ describe('CampaignProgressionService Instagram steps (MYAH-445)', () => {
         return [{ id: parameters[0] }];
       return [];
     });
-    const service = new CampaignProgressionService(undefined, undefined, {
-      loadExecutionPlanInTransaction: async () => plan,
-    } as never);
+    const service = new CampaignProgressionService(
+      { getAccess: jest.fn(async () => 'ACTIVE') } as never,
+      undefined,
+      undefined,
+      {
+        loadExecutionPlanInTransaction: async () => plan,
+      } as never,
+    );
     return { service, query, calls };
   };
 

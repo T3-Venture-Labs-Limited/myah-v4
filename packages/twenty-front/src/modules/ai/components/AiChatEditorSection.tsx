@@ -11,6 +11,12 @@ import { AiChatApprovalCard } from '@/ai/components/AiChatApprovalCard';
 import { AiChatQuestionCard } from '@/ai/components/AiChatQuestionCard';
 import { AIChatNoMoreBillingCreditsBanner } from '@/ai/components/AIChatNoMoreBillingCreditsBanner';
 import { AiChatStandaloneError } from '@/ai/components/AiChatStandaloneError';
+import { MyahAiUsageBanner } from '@/ai/components/MyahAiUsageBanner';
+import { agentChatErrorComponentFamilyState } from '@/ai/states/agentChatErrorComponentFamilyState';
+import { currentAiChatThreadState } from '@/ai/states/currentAiChatThreadState';
+import { AiChatErrorCode } from '@/ai/utils/aiChatErrorCode';
+import { useAtomComponentFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomComponentFamilyStateValue';
+import { isGraphqlErrorOfType } from '~/utils/is-graphql-error-of-type.util';
 import { AgentChatContextPreview } from '@/ai/components/internal/AgentChatContextPreview';
 import { AgentChatFileUploadButton } from '@/ai/components/internal/AgentChatFileUploadButton';
 import { AiChatContextUsageButton } from '@/ai/components/internal/AiChatContextUsageButton';
@@ -142,7 +148,24 @@ export const AiChatEditorSection = () => {
   );
   const { selectedModelId } = useAgentChatModelId();
 
-  const { editor, handleSendAndClear } = useAiChatEditor();
+  const {
+    editor,
+    handleSendAndClear,
+    isMyahUsageBlocked,
+    myahUsageExhausted,
+    isMyahSubscriptionRequired,
+  } = useAiChatEditor();
+  const currentAiChatThread = useAtomStateValue(currentAiChatThreadState);
+  const agentChatError = useAtomComponentFamilyStateValue(
+    agentChatErrorComponentFamilyState,
+    { threadId: currentAiChatThread },
+  );
+  const hasMyahUsageError =
+    isGraphqlErrorOfType(
+      agentChatError,
+      AiChatErrorCode.INCLUDED_USAGE_EXHAUSTED,
+    ) ||
+    isGraphqlErrorOfType(agentChatError, AiChatErrorCode.SUBSCRIPTION_REQUIRED);
 
   const pendingQuestion = useAtomComponentSelectorValue(
     agentChatPendingQuestionComponentSelector,
@@ -166,8 +189,11 @@ export const AiChatEditorSection = () => {
             variant="warning"
           />
         )}
-        {hasReachedCurrentBillingPeriodCap && (
+        {!isMyahSubscriptionRequired && hasReachedCurrentBillingPeriodCap && (
           <AIChatNoMoreBillingCreditsBanner />
+        )}
+        {myahUsageExhausted && !hasMyahUsageError && (
+          <MyahAiUsageBanner code="INCLUDED_USAGE_EXHAUSTED" />
         )}
         {isDefined(pendingApproval) ? (
           <AiChatApprovalCard pendingApproval={pendingApproval} />
@@ -198,7 +224,7 @@ export const AiChatEditorSection = () => {
                 />
                 <SendMessageButton
                   onSend={handleSendAndClear}
-                  isDisabled={hasNoEnabledModels}
+                  isDisabled={hasNoEnabledModels || isMyahUsageBlocked}
                 />
               </StyledRightButtonsContainer>
             </StyledButtonsContainer>

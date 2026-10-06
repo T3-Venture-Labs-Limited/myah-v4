@@ -103,6 +103,7 @@ const submission = () => ({
 
 type SetupOptions = {
   workspace?: Record<string, unknown>;
+  access?: string;
   campaign?: Record<string, unknown>;
   authorization?: Record<string, unknown>;
   activation?: Record<string, unknown> | null;
@@ -298,6 +299,7 @@ const setup = (options: SetupOptions = {}) => {
   };
   return {
     adapter: new CampaignFinalSubmissionAuthorityAdapter(
+      { getAccess: jest.fn(async () => options.access ?? 'ACTIVE') } as never,
       audience as never,
       sender as never,
       sequence as never,
@@ -372,6 +374,30 @@ describe('CampaignFinalSubmissionAuthorityAdapter', () => {
       false,
     );
   });
+
+  it.each(['LAPSED', 'NEEDS_SUBSCRIPTION'])(
+    'rejects %s before provider or attempt work',
+    async (access) => {
+      const { adapter, manager, calls } = setup({ access });
+      await expect(
+        adapter.revalidate(request(), manager as never),
+      ).resolves.toEqual({
+        status: 'REJECTED',
+        reason: 'SUBSCRIPTION_REQUIRED',
+      });
+      expect(calls).toHaveLength(1);
+    },
+  );
+
+  it.each(['ACTIVE', 'PAYMENT_RETRYING', 'COMPLIMENTARY'])(
+    'permits %s at final submission',
+    async (access) => {
+      const { adapter, manager } = setup({ access });
+      await expect(
+        adapter.revalidate(request(), manager as never),
+      ).resolves.toMatchObject({ status: 'AUTHORIZED' });
+    },
+  );
 
   it('returns granular suppression denial', async () => {
     const { adapter, manager } = setup({

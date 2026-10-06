@@ -1,6 +1,7 @@
 import { AIChatNoMoreBillingCreditsBanner } from '@/ai/components/AIChatNoMoreBillingCreditsBanner';
 import { AiChatApiKeyNotConfiguredMessage } from '@/ai/components/AiChatApiKeyNotConfiguredMessage';
 import { AiChatErrorMessage } from '@/ai/components/AiChatErrorMessage';
+import { MyahAiUsageBanner } from '@/ai/components/MyahAiUsageBanner';
 import { type AiChatError } from '@/ai/types/AiChatError';
 import { AiChatErrorCode } from '@/ai/utils/aiChatErrorCode';
 import { isGraphqlErrorOfType } from '~/utils/is-graphql-error-of-type.util';
@@ -14,6 +15,14 @@ export const AiChatErrorRenderer = ({
   error,
   onRetry,
 }: AiChatErrorRendererProps) => {
+  if (isGraphqlErrorOfType(error, AiChatErrorCode.INCLUDED_USAGE_EXHAUSTED)) {
+    return (
+      <MyahAiUsageBanner code="INCLUDED_USAGE_EXHAUSTED" onRetry={onRetry} />
+    );
+  }
+  if (isGraphqlErrorOfType(error, AiChatErrorCode.SUBSCRIPTION_REQUIRED)) {
+    return <MyahAiUsageBanner code="SUBSCRIPTION_REQUIRED" />;
+  }
   if (
     isGraphqlErrorOfType(
       error,

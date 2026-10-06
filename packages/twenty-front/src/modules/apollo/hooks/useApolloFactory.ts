@@ -12,6 +12,7 @@ import { returnToPathState } from '@/auth/states/returnToPathState';
 import { isValidReturnToPath } from '@/auth/utils/isValidReturnToPath';
 import { tokenPairState } from '@/auth/states/tokenPairState';
 import { appVersionState } from '@/client-config/states/appVersionState';
+import { myahSubscriptionRefreshRequestedState } from '@/settings/billing/states/myahSubscriptionRefreshRequestedState';
 import { useSnackBar } from '@/ui/feedback/snack-bar-manager/hooks/useSnackBar';
 import { useAtomState } from '@/ui/utilities/state/jotai/hooks/useAtomState';
 import { useAtomStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomStateValue';
@@ -28,6 +29,9 @@ export const useApolloFactory = (options: Partial<Options> = {}) => {
 
   const navigate = useNavigate();
   const setTokenPair = useSetAtomState(tokenPairState);
+  const setMyahSubscriptionRefreshRequested = useSetAtomState(
+    myahSubscriptionRefreshRequestedState,
+  );
   const [currentWorkspace, setCurrentWorkspace] = useAtomState(
     currentWorkspaceState,
   );
@@ -65,6 +69,7 @@ export const useApolloFactory = (options: Partial<Options> = {}) => {
       onTokenPairChange: (tokenPair) => {
         setTokenPair(tokenPair);
       },
+      onSubscriptionRequired: () => setMyahSubscriptionRefreshRequested(true),
       onUnauthenticatedError: () => {
         setTokenPair(null);
         setCurrentUser(null);
@@ -111,6 +116,7 @@ export const useApolloFactory = (options: Partial<Options> = {}) => {
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [
     setTokenPair,
+    setMyahSubscriptionRefreshRequested,
     setCurrentUser,
     setCurrentWorkspaceMember,
     setCurrentWorkspace,

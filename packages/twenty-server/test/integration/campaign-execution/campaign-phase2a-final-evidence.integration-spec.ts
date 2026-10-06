@@ -516,6 +516,7 @@ describe('Campaign Phase 2A final retained PostgreSQL evidence', () => {
 
   it('blocks exact expired RESERVED evidence once, releases capacity, and holds the occurrence/enrollment', async () => {
     const progression = new CampaignProgressionService(
+      { getAccess: jest.fn(async () => 'ACTIVE') } as never,
       new OutboundEmailAttemptService(new MailboxCapacityService()),
     );
     await dataSource.query(

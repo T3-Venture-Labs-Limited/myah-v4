@@ -12,6 +12,7 @@ import { type FlatApiKey } from 'src/engine/core-modules/api-key/types/flat-api-
 import { type FlatWorkspace } from 'src/engine/core-modules/workspace/types/flat-workspace.type';
 import { AccessTokenService } from 'src/engine/core-modules/auth/token/services/access-token.service';
 import { HttpExceptionHandlerService } from 'src/engine/core-modules/exception-handler/http-exception-handler.service';
+import { MyahSubscriptionApiAccessService } from 'src/engine/core-modules/myah-subscription/myah-subscription-api-access.service';
 import { TwentyConfigService } from 'src/engine/core-modules/twenty-config/twenty-config.service';
 import { type UserEntity } from 'src/engine/core-modules/user/user.entity';
 import { JwtAuthGuard } from 'src/engine/guards/jwt-auth.guard';
@@ -54,6 +55,11 @@ describe('McpCoreController', () => {
         {
           provide: TwentyConfigService,
           useValue: { get: jest.fn().mockReturnValue('http://localhost:3000') },
+        },
+        // Subscription refusal is tested in myah-subscription-api-access.service.spec.
+        {
+          provide: MyahSubscriptionApiAccessService,
+          useValue: { assertRequestAllowed: jest.fn() },
         },
         McpAuthGuard,
       ],

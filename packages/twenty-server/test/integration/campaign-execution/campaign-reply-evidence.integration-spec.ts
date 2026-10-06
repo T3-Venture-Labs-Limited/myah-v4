@@ -983,7 +983,9 @@ describe('Campaign reply evidence in PostgreSQL', () => {
     );
     const timelineEventWriter = { writeInTransaction: jest.fn() };
     const service = new CampaignReplyService(
-      new CampaignProgressionService(),
+      new CampaignProgressionService({
+        getAccess: jest.fn(async () => 'ACTIVE'),
+      } as never),
       timelineEventWriter as never,
       lifecycle,
     );

@@ -29,6 +29,7 @@ const clientConfigBooleanProperties = [
   'isClickHouseConfigured',
   'isConfigVariablesInDbEnabled',
   'isEmailVerificationRequired',
+  'isMyahSubscriptionRequired',
   'isEmailingDomainInDemoMode',
   'isGoogleCalendarEnabled',
   'isGoogleMessagingEnabled',

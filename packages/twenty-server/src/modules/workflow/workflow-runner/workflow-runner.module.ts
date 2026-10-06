@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { MyahSubscriptionModule } from 'src/engine/core-modules/myah-subscription/myah-subscription.module';
 
 import { BillingModule } from 'src/engine/core-modules/billing/billing.module';
 import { MetricsModule } from 'src/engine/core-modules/metrics/metrics.module';
@@ -13,6 +14,7 @@ import { WorkflowRunnerWorkspaceService } from 'src/modules/workflow/workflow-ru
 
 @Module({
   imports: [
+    MyahSubscriptionModule,
     WorkflowCommonModule,
     WorkflowExecutorModule,
     BillingModule,

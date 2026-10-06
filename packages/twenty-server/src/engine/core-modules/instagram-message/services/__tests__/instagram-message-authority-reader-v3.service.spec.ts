@@ -468,6 +468,7 @@ const buildSendHarness = async (
         instagramAccountRecordId: accountId,
       }),
     } as never,
+    { assertCanAct: jest.fn() } as never,
   );
   const execute = {
     workspaceId,

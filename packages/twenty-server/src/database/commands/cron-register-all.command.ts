@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { MyahSubscriptionReconciliationCommand } from 'src/engine/core-modules/myah-subscription/myah-subscription-reconciliation.cron';
 
 import { Command, CommandRunner } from 'nest-commander';
 import { isDefined } from 'twenty-shared/utils';
@@ -72,6 +73,7 @@ export class CronRegisterAllCommand extends CommandRunner {
     private readonly unipileInstagramAccountRecoveryCronCommand: UnipileInstagramAccountRecoveryCronCommand,
     private readonly retiredCronJobsCleanupCommand: RetiredCronJobsCleanupCommand,
     private readonly twentyConfigService: TwentyConfigService,
+    private readonly myahSubscriptionReconciliationCommand: MyahSubscriptionReconciliationCommand,
   ) {
     super();
   }
@@ -100,6 +102,12 @@ export class CronRegisterAllCommand extends CommandRunner {
       {
         name: 'RetiredCronJobsCleanup',
         command: this.retiredCronJobsCleanupCommand,
+      },
+      {
+        name: 'MyahSubscriptionReconciliation',
+        // Always registered: flipping the paywall flag in the database must not
+        // need a redeploy, and the job does nothing without subscription rows.
+        command: this.myahSubscriptionReconciliationCommand,
       },
       {
         name: 'CampaignEmailRuntime',
