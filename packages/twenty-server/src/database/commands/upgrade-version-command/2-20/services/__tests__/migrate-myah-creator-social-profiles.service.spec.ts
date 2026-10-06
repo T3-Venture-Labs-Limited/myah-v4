@@ -91,6 +91,35 @@ describe('MigrateMyahCreatorSocialProfilesService', () => {
     expect(operationService.execute).not.toHaveBeenCalled();
   });
 
+  it('does nothing once the legacy social fields have been removed (re-run after 1791100000000)', async () => {
+    // Re-running after the per-platform columns were dropped would compute a
+    // different digest than the completed first run and fail every Creator.
+    const { service, workspaceDataSource, operationService, writer } =
+      createService({
+        creators: [
+          { id: 'creator-1', gender: 'FEMALE', notes: 'already migrated' },
+        ],
+      });
+
+    await expect(
+      service.migrate({
+        workspaceId: '11111111-1111-4111-8111-111111111111',
+        workspaceDataSource: workspaceDataSource as never,
+        dryRun: false,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        scanned: 0,
+        plannedNotes: 0,
+        failures: 0,
+        conflicts: 0,
+        skippedRestrictedValues: 0,
+      }),
+    );
+    expect(operationService.execute).not.toHaveBeenCalled();
+    expect(writer.createSupplementaryNote).not.toHaveBeenCalled();
+  });
+
   it('blocks all preservation when destination object access would broaden visibility', async () => {
     const { service, workspaceDataSource, operationService, dataSource } =
       createService({

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { type DataSource } from 'typeorm';
 
+import { LEGACY_CREATOR_SOCIAL_FIELD_NAME } from 'src/database/commands/upgrade-version-command/2-20/2-20-workspace-command-1791100000000-remove-legacy-creator-social-fields.command';
 import {
   LEGACY_CREATOR_MIGRATION_FIELDS,
   planMyahCreatorSocialProfileMigration,
@@ -61,7 +62,21 @@ export class MigrateMyahCreatorSocialProfilesService {
     workspaceDataSource: GlobalWorkspaceDataSource;
     dryRun: boolean;
   }): Promise<CreatorSocialProfileMigrationReport> {
-    const rows = await this.getCreatorRows(workspaceDataSource, workspaceId);
+    const allRows = await this.getCreatorRows(workspaceDataSource, workspaceId);
+    // 2.20 workspace commands re-run whenever a later 2.20 instance command is
+    // added. Once 1791100000000 has removed the per-platform fields this
+    // migration has already completed; re-planning without those fields would
+    // produce new digests that conflict with the first run's receipts.
+    const hasLegacySocialFields = allRows.some((row) =>
+      Object.keys(row).some((field) => LEGACY_CREATOR_SOCIAL_FIELD_NAME.test(field)),
+    );
+    const rows = hasLegacySocialFields ? allRows : [];
+
+    if (!hasLegacySocialFields && allRows.length > 0) {
+      this.logger.log(
+        `MYAH-409 Creator migration skipped workspace=${workspaceId} reason=legacy-social-fields-removed`,
+      );
+    }
     const { allRestricted, currentRestricted } =
       await this.getRestrictedFields(workspaceId);
     const plans = rows.map((row) =>
