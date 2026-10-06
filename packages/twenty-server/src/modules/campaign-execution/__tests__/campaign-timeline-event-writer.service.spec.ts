@@ -87,6 +87,7 @@ describe('CampaignTimelineEventWriterService', () => {
       sourceType: 'OCCURRENCE' as const,
       creatorId: '66666666-6666-4666-8666-666666666666',
       reason: 'SENDER_NOT_READY',
+      channel: 'INSTAGRAM' as const,
     };
 
     await Promise.all([
@@ -95,6 +96,9 @@ describe('CampaignTimelineEventWriterService', () => {
     ]);
 
     expect(upsert).toHaveBeenCalledTimes(4);
+    expect(upsert.mock.calls[0][0].properties.campaignEvent.channel).toBe(
+      'INSTAGRAM',
+    );
     const projectionCounts = upsert.mock.calls.reduce<Record<string, number>>(
       (counts, [projection]) => ({
         ...counts,

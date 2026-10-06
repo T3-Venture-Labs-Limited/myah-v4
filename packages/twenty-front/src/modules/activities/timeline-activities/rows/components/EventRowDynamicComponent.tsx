@@ -1,5 +1,6 @@
 import { EventRowActivity } from '@/activities/timeline-activities/rows/activity/components/EventRowActivity';
 import { EventRowCalendarEvent } from '@/activities/timeline-activities/rows/calendar/components/EventRowCalendarEvent';
+import { EventRowItem } from '@/activities/timeline-activities/rows/components/EventRowItem';
 import { EventRowCampaign } from '@/activities/timeline-activities/rows/campaign/components/EventRowCampaign';
 import { type EventRowDynamicComponentProps } from '@/activities/timeline-activities/rows/components/EventRowDynamicComponent.types';
 import { EventRowGenericLinked } from '@/activities/timeline-activities/rows/generic/components/EventRowGenericLinked';
@@ -12,6 +13,17 @@ export const EventRowDynamicComponent = (
   props: EventRowDynamicComponentProps,
 ) => {
   const { linkedObjectMetadataItem } = props;
+
+  if (props.event.name === 'creator-message.linked') {
+    const message = props.event.properties?.creatorMessage;
+    return (
+      <EventRowItem variant="action">
+        {message?.channel === 'INSTAGRAM' ? 'Instagram message' : 'Email'}{' '}
+        {message?.direction === 'SENT' ? 'sent' : 'received'}
+        {props.createdAt ? ` · ${props.createdAt}` : ''}
+      </EventRowItem>
+    );
+  }
 
   if (props.event.name.startsWith('campaign.')) {
     return <EventRowCampaign event={props.event} createdAt={props.createdAt} />;
