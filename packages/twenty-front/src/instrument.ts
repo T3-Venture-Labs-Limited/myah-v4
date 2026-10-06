@@ -22,6 +22,8 @@ if (isNonEmptyString(SENTRY_FRONT_DSN)) {
     environment: SENTRY_ENVIRONMENT,
     release: APP_VERSION,
     dsn: SENTRY_FRONT_DSN,
+    // Same-origin endpoint that forwards to Sentry; ad blockers block sentry.io.
+    tunnel: `${REACT_APP_SERVER_BASE_URL}/tunnel`,
     integrations: [
       Sentry.reactRouterV6BrowserTracingIntegration({
         useEffect,
