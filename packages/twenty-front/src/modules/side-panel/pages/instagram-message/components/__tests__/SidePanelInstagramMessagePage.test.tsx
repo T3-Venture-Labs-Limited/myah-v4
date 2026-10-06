@@ -50,8 +50,10 @@ jest.mock(
 );
 const calls: string[] = [];
 let blockedCode: string | null = null;
+let preparedAccountId = 'account';
 beforeEach(() => {
   calls.length = 0;
+  preparedAccountId = 'account';
   mockCreators = [];
   mockSearch.mockClear();
   blockedCode = null;
@@ -79,7 +81,7 @@ beforeEach(() => {
                       code: blockedCode,
                       normalizedHandle: 'recipient',
                       creatorRecordId: null,
-                      sender,
+                      sender: { ...sender, accountRecordId: preparedAccountId },
                       actionKind: 'START_CHAT',
                       preparationFingerprint: 'fingerprint',
                     },
@@ -145,13 +147,16 @@ it('offers a separate labelled keyboard raw-handle row, prepares only after comm
   );
   fireEvent.keyDown(recipient, { key: 'ArrowDown' });
   fireEvent.keyDown(recipient, { key: 'Enter' });
-  await screen.findByText('Confirmed recipient: @recipient');
-  expect(screen.getByText('@sender')).toBeVisible();
+  expect(screen.getByText('@recipient')).toBeVisible();
+  expect(await screen.findByText('@sender')).toBeVisible();
   expect(send).toBeDisabled();
   fireEvent.change(screen.getByRole('textbox', { name: 'Message' }), {
     target: { value: 'Hello' },
   });
   await waitFor(() => expect(send).toBeEnabled());
+  expect(
+    screen.queryByRole('region', { name: 'Message to send' }),
+  ).not.toBeInTheDocument();
   await act(async () => {
     fireEvent.click(send);
     fireEvent.click(send);
@@ -161,6 +166,9 @@ it('offers a separate labelled keyboard raw-handle row, prepares only after comm
   ).toHaveLength(1);
   expect(screen.getByRole('button', { name: 'Check status' })).toBeEnabled();
   expect(send).toBeDisabled();
+  expect(
+    screen.queryByRole('button', { name: 'Remove recipient' }),
+  ).not.toBeInTheDocument();
   expect(screen.queryByRole('tab')).not.toBeInTheDocument();
 });
 it.each([
@@ -180,10 +188,52 @@ it.each([
       )?.recipient,
     ).toEqual({ creatorRecordId: 'creator' });
     expect(
-      screen.getByRole('button', { name: 'Refresh recipient' }),
+      screen.getByRole('button', { name: 'Remove recipient' }),
     ).toBeEnabled();
+    expect(
+      screen.queryByRole('button', { name: 'Refresh recipient' }),
+    ).not.toBeInTheDocument();
   },
 );
+
+it('keeps typing in the message field and never moves focus to the recipient search', async () => {
+  const store = setup();
+  await screen.findByText('@sender');
+  const message = screen.getByRole('textbox', { name: 'Message' });
+  act(() => message.focus());
+  fireEvent.change(message, { target: { value: 'h' } });
+  fireEvent.change(message, { target: { value: 'he' } });
+  await act(async () => {});
+  expect(message).toHaveFocus();
+  expect(screen.getByRole('combobox', { name: 'To' })).toHaveValue('');
+  expect(
+    store.get(instagramMessageComposerState.atomFamily({ instanceId: 'page' }))
+      ?.body,
+  ).toBe('he');
+  expect(
+    screen.queryByText('Enter a message before sending.'),
+  ).not.toBeInTheDocument();
+});
+
+it('shows the selected recipient as a removable tag instead of the search field', async () => {
+  const store = setup('creator');
+  expect(
+    screen.queryByRole('combobox', { name: 'To' }),
+  ).not.toBeInTheDocument();
+  expect(await screen.findByText('Ada · @recipient')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Remove recipient' }));
+  expect(
+    store.get(instagramMessageComposerState.atomFamily({ instanceId: 'page' }))
+      ?.recipient,
+  ).toBeNull();
+  const input = screen.getByRole('combobox', { name: 'To' });
+  expect(input).toHaveFocus();
+  expect(input).toHaveAttribute(
+    'placeholder',
+    'Search for one Creator or enter @handle',
+  );
+  expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+});
 
 it('selects a Creator with keyboard through the picker search boundary, not a generic create callback', async () => {
   mockCreators = [
@@ -207,7 +257,8 @@ it('selects a Creator with keyboard through the picker search boundary, not a ge
     store.get(instagramMessageComposerState.atomFamily({ instanceId: 'page' }))
       ?.recipient,
   ).toEqual({ creatorRecordId: 'creator' });
-  await screen.findByText('Confirmed recipient: @recipient');
+  expect(screen.getByRole('textbox', { name: 'Message' })).toHaveFocus();
+  await screen.findByText('Ada \u00b7 @recipient');
   expect(screen.queryByText('Add New')).not.toBeInTheDocument();
 });
 
@@ -220,7 +271,38 @@ it('rejects invalid raw handles without provider preparation and lets keyboard u
   expect(calls).not.toContain('PrepareInstagramMessageComposer');
   fireEvent.keyDown(input, { key: 'Escape' });
   expect(input).toHaveAttribute('aria-expanded', 'false');
-  const refresh = screen.getByRole('button', { name: 'Refresh recipient' });
-  act(() => refresh.focus());
-  expect(refresh).toHaveFocus();
+});
+
+it('keeps the selected recipient while the message is typed', async () => {
+  const store = setup('creator');
+  const message = screen.getByRole('textbox', { name: 'Message' });
+  act(() => message.focus());
+  fireEvent.change(message, { target: { value: 'hello' } });
+  await act(async () => {});
+  expect(message).toHaveFocus();
+  expect(
+    store.get(instagramMessageComposerState.atomFamily({ instanceId: 'page' })),
+  ).toMatchObject({ recipient: { creatorRecordId: 'creator' }, body: 'hello' });
+});
+
+it('labels the recipient tag as the To field', async () => {
+  setup('creator');
+  expect(screen.getByRole('group', { name: 'To' })).toBeVisible();
+});
+
+it('re-checks the Instagram account when the recipient is removed', async () => {
+  setup('creator');
+  await screen.findByText('Ada \u00b7 @recipient');
+  const accountCalls = () =>
+    calls.filter((name) => name === 'InstagramMessageComposerAccount').length;
+  const before = accountCalls();
+  fireEvent.click(screen.getByRole('button', { name: 'Remove recipient' }));
+  await waitFor(() => expect(accountCalls()).toBe(before + 1));
+});
+
+it('explains a sender mismatch instead of silently disabling Send', async () => {
+  preparedAccountId = 'other-account';
+  setup('creator');
+  await screen.findByText(/The recipient or sender changed/);
+  expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
 });

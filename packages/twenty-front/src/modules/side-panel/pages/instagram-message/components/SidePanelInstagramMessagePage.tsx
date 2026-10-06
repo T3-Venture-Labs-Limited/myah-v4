@@ -1,12 +1,15 @@
-import { useId } from 'react';
+import { useId, useRef } from 'react';
 import { t } from '@lingui/core/macro';
 import { styled } from '@linaria/react';
+import { IconSend } from 'twenty-ui/icon';
 import { Button } from 'twenty-ui/input';
 import { themeCssVariables } from 'twenty-ui/theme-constants';
-import { InstagramMessageRecipientInput } from '@/side-panel/pages/instagram-message/components/InstagramMessageRecipientInput';
+import {
+  InstagramMessageRecipientInput,
+  StyledInstagramMessageFieldLabel,
+} from '@/side-panel/pages/instagram-message/components/InstagramMessageRecipientInput';
 import { useInstagramMessageComposer } from '@/side-panel/pages/instagram-message/hooks/useInstagramMessageComposer';
 import { TextArea } from '@/ui/input/components/TextArea';
-import { SidePanelFooter } from '@/ui/layout/side-panel/components/SidePanelFooter';
 
 const StyledPage = styled.section`
   display: flex;
@@ -24,12 +27,11 @@ const StyledContent = styled.div`
   overflow-y: auto;
   padding: ${themeCssVariables.spacing[3]};
 `;
-const StyledPreview = styled.div`
-  border: 1px solid ${themeCssVariables.border.color.light};
-  border-radius: ${themeCssVariables.border.radius.md};
-  overflow-wrap: anywhere;
-  padding: ${themeCssVariables.spacing[2]};
-  white-space: pre-wrap;
+const StyledActions = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: ${themeCssVariables.spacing[2]};
+  justify-content: flex-end;
 `;
 
 const preparationMessage = (code: string | null | undefined) => {
@@ -47,17 +49,18 @@ const preparationMessage = (code: string | null | undefined) => {
     case 'ACCOUNT_UNAVAILABLE':
       return t`The connected Instagram account is unavailable. Check the account connection before sending.`;
     case 'CONTEXT_CHANGED':
-      return t`The recipient or sender changed. Refresh the recipient before sending.`;
+      return t`The recipient or sender changed. Remove the recipient and choose them again before sending.`;
     case 'CONVERSATION_DELETED':
       return t`This contact's Instagram conversation was deleted. Restore it in the Inbox or start a new conversation from the recipient's Instagram profile.`;
     default:
-      return t`Could not resolve this recipient safely. Refresh the recipient to check again.`;
+      return t`Could not resolve this recipient safely. Remove the recipient and choose them again to retry.`;
   }
 };
 
 export const SidePanelInstagramMessagePage = () => {
   const composer = useInstagramMessageComposer();
   const messageId = useId();
+  const contentRef = useRef<HTMLDivElement>(null);
   const state = composer.composer;
   const attempt = state?.attempt;
   const result = attempt?.result;
@@ -90,13 +93,15 @@ export const SidePanelInstagramMessagePage = () => {
                   : composer.accountLoading
                     ? t`Loading Instagram sender account`
                     : composer.account?.status !== 'READY'
-                      ? t`The connected Instagram account is unavailable. Refresh to check its connection.`
+                      ? t`The connected Instagram account is unavailable. Check its connection in Settings, then return here.`
                       : composer.preparation?.status === 'BLOCKED'
                         ? preparationMessage(composer.preparation.code)
-                        : state?.recipient && !composer.preparation
-                          ? t`Resolving Instagram recipient`
-                          : !state?.body.trim()
-                            ? t`Enter a message before sending.`
+                        : composer.preparation?.status === 'READY' &&
+                            composer.preparation.sender?.accountRecordId !==
+                              composer.account.sender?.accountRecordId
+                          ? preparationMessage('CONTEXT_CHANGED')
+                          : state?.recipient && !composer.preparation
+                            ? t`Resolving Instagram recipient`
                             : null;
   const isAlert =
     !composer.canMessage ||
@@ -108,17 +113,26 @@ export const SidePanelInstagramMessagePage = () => {
 
   return (
     <StyledPage aria-label={t`New Instagram Message`}>
-      <StyledContent>
+      <StyledContent ref={contentRef}>
         <InstagramMessageRecipientInput
           recipient={state?.recipient ?? null}
+          confirmedHandle={handle}
           disabled={frozen || !composer.canMessage}
-          onChange={composer.setRecipient}
+          onChange={(recipient) => {
+            composer.setRecipient(recipient);
+            if (recipient) {
+              // The search field unmounts on selection; hand focus to Message.
+              contentRef.current?.querySelector('textarea')?.focus();
+            } else {
+              // Replacing the recipient is also the way to retry a stale lookup.
+              composer.refreshPreparation();
+            }
+          }}
         />
-        {handle ? (
-          <div role="status">{t`Confirmed recipient: @${handle}`}</div>
-        ) : null}
         <div>
-          <strong>{t`From`}</strong>
+          <StyledInstagramMessageFieldLabel as="div">
+            {t`From`}
+          </StyledInstagramMessageFieldLabel>
           <div>{sender ?? t`No connected sender`}</div>
         </div>
         <TextArea
@@ -130,13 +144,6 @@ export const SidePanelInstagramMessagePage = () => {
           readOnly={frozen}
           onChange={composer.setBody}
         />
-        {state?.body.trim() ? (
-          <section aria-label={t`Message to send`}>
-            <StyledPreview>
-              {attempt?.input.body ?? state.body.trim()}
-            </StyledPreview>
-          </section>
-        ) : null}
         {message ? (
           <div role={isAlert ? 'alert' : 'status'} aria-live="polite">
             {message}
@@ -150,51 +157,43 @@ export const SidePanelInstagramMessagePage = () => {
             </time>
           </div>
         ) : null}
-        {!attempt ? (
+        <StyledActions>
+          {attempt ? (
+            <Button
+              title={t`Check status`}
+              variant="secondary"
+              size="small"
+              disabled={composer.checking || !composer.attemptInWorkspace}
+              onClick={() => void composer.checkStatus()}
+            />
+          ) : null}
+          {composer.canStartNewAttempt ? (
+            <Button
+              title={t`Start new attempt`}
+              variant="secondary"
+              size="small"
+              onClick={composer.startNewAttempt}
+            />
+          ) : null}
+          {result?.status === 'SENT' ? (
+            <Button
+              title={t`Open Inbox`}
+              variant="secondary"
+              size="small"
+              onClick={composer.openInbox}
+            />
+          ) : null}
           <Button
-            title={t`Refresh recipient`}
-            variant="secondary"
-            size="small"
-            onClick={composer.refreshPreparation}
-          />
-        ) : (
-          <Button
-            title={t`Check status`}
-            variant="secondary"
-            size="small"
-            disabled={composer.checking || !composer.attemptInWorkspace}
-            onClick={() => void composer.checkStatus()}
-          />
-        )}
-        {composer.canStartNewAttempt ? (
-          <Button
-            title={t`Start new attempt`}
-            variant="secondary"
-            size="small"
-            onClick={composer.startNewAttempt}
-          />
-        ) : null}
-        {result?.status === 'SENT' ? (
-          <Button
-            title={t`Open Inbox`}
-            variant="secondary"
-            size="small"
-            onClick={composer.openInbox}
-          />
-        ) : null}
-      </StyledContent>
-      <SidePanelFooter
-        actions={[
-          <Button
-            key="send"
             title={t`Send`}
+            Icon={IconSend}
             variant="primary"
+            accent="brand"
             size="small"
             disabled={!composer.canSend}
             onClick={() => void composer.send()}
-          />,
-        ]}
-      />
+          />
+        </StyledActions>
+      </StyledContent>
     </StyledPage>
   );
 };

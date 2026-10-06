@@ -1,5 +1,6 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { t } from '@lingui/core/macro';
+import { styled } from '@linaria/react';
 import { searchRecordStoreFamilyState } from '@/object-record/record-picker/multiple-record-picker/states/searchRecordStoreComponentFamilyState';
 import { useSingleRecordPickerPerformSearch } from '@/object-record/record-picker/single-record-picker/hooks/useSingleRecordPickerPerformSearch';
 import { SingleRecordPickerComponentInstanceContext } from '@/object-record/record-picker/single-record-picker/states/contexts/SingleRecordPickerComponentInstanceContext';
@@ -7,42 +8,105 @@ import { type InstagramMessageComposerState } from '@/side-panel/pages/instagram
 import { DropdownMenuItemsContainer } from '@/ui/layout/dropdown/components/DropdownMenuItemsContainer';
 import { DropdownMenuSearchInput } from '@/ui/layout/dropdown/components/DropdownMenuSearchInput';
 import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
+import { Chip, ChipVariant } from 'twenty-ui/data-display';
+import { IconX } from 'twenty-ui/icon';
+import { LightIconButton } from 'twenty-ui/input';
 import { StyledMenuItemSelect } from 'twenty-ui/navigation';
+import { themeCssVariables } from 'twenty-ui/theme-constants';
 
 export type InstagramMessageRecipientInputProps = {
   recipient: InstagramMessageComposerState['recipient'];
+  confirmedHandle?: string | null;
   disabled: boolean;
   onChange: (recipient: InstagramMessageComposerState['recipient']) => void;
 };
 
-const CreatorLabel = ({ recordId }: { recordId: string }) => {
-  const searchRecordStore = useAtomFamilyStateValue(
-    searchRecordStoreFamilyState,
-    recordId,
+export const StyledInstagramMessageFieldLabel = styled.label`
+  color: ${themeCssVariables.font.color.light};
+  display: block;
+  font-size: ${themeCssVariables.font.size.xs};
+  font-weight: ${themeCssVariables.font.weight.semiBold};
+  margin-bottom: ${themeCssVariables.spacing[1]};
+`;
+
+const StyledRecipientRow = styled.div`
+  display: flex;
+  padding: ${themeCssVariables.spacing[1]} 0;
+`;
+
+const useCreatorLabel = (recordId: string | null) =>
+  useAtomFamilyStateValue(searchRecordStoreFamilyState, recordId ?? '')
+    ?.label ?? t`Selected Creator`;
+
+const CreatorLabel = ({ recordId }: { recordId: string }) => (
+  <>{useCreatorLabel(recordId)}</>
+);
+
+const RecipientTag = ({
+  recipient,
+  confirmedHandle,
+  disabled,
+  labelId,
+  onRemove,
+}: {
+  recipient: NonNullable<InstagramMessageComposerState['recipient']>;
+  labelId: string;
+  confirmedHandle?: string | null;
+  disabled: boolean;
+  onRemove: () => void;
+}) => {
+  const creatorRecordId =
+    'creatorRecordId' in recipient ? recipient.creatorRecordId : null;
+  const creatorLabel = useCreatorLabel(creatorRecordId);
+  const handle =
+    confirmedHandle ?? ('rawHandle' in recipient ? recipient.rawHandle : null);
+  const label = creatorRecordId
+    ? handle
+      ? t`${creatorLabel} · @${handle}`
+      : creatorLabel
+    : t`@${handle ?? ''}`;
+  return (
+    <StyledRecipientRow role="group" aria-labelledby={labelId}>
+      <Chip
+        label={label}
+        variant={ChipVariant.Highlighted}
+        clickable={false}
+        rightComponent={
+          disabled ? null : (
+            <LightIconButton
+              aria-label={t`Remove recipient`}
+              Icon={IconX}
+              size="small"
+              onClick={onRemove}
+            />
+          )
+        }
+      />
+    </StyledRecipientRow>
   );
-  return <>{searchRecordStore?.label ?? t`Selected Creator`}</>;
 };
 
-type RecipientComboboxProps = InstagramMessageRecipientInputProps;
-
 const RecipientCombobox = ({
-  recipient,
+  id,
   disabled,
   onChange,
-}: RecipientComboboxProps) => {
-  const id = useId();
+}: Pick<InstagramMessageRecipientInputProps, 'disabled' | 'onChange'> & {
+  id: string;
+}) => {
+  const inputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
-  const creatorRecordId =
-    recipient && 'creatorRecordId' in recipient
-      ? recipient.creatorRecordId
-      : null;
+  // Focus once on mount only; the shared search input refocuses on every render,
+  // which stole keystrokes from the message field (MYAH-474).
+  useEffect(() => {
+    inputRef.current?.focus({ preventScroll: true });
+  }, []);
   const { pickableMorphItems, loading, error } =
     useSingleRecordPickerPerformSearch({
       objectNameSingulars: ['creator'],
       searchFilter: search,
-      selectedIds: creatorRecordId ? [creatorRecordId] : [],
+      selectedIds: [],
     });
   // Syntax is UX only; preparation remains the authority for handle and Creator identity.
   const rawHandle = search.trim().replace(/^@/, '').toLowerCase();
@@ -65,23 +129,11 @@ const RecipientCombobox = ({
     const option = options[index];
     if (index < 0 || index >= options.length || disabled) return;
     onChange(option);
-    setSearch('');
-    setExpanded(false);
-    setActiveIndex(-1);
   };
   return (
-    <div>
-      <label htmlFor={id}>{t`To`}</label>
-      {recipient ? (
-        <div role="status">
-          {creatorRecordId ? (
-            <CreatorLabel recordId={creatorRecordId} />
-          ) : (
-            `@${'rawHandle' in recipient ? recipient.rawHandle : ''}`
-          )}
-        </div>
-      ) : null}
+    <>
       <DropdownMenuSearchInput
+        ref={inputRef}
         id={id}
         aria-label={t`To`}
         role="combobox"
@@ -93,7 +145,7 @@ const RecipientCombobox = ({
             ? `${id}-option-${activeIndex}`
             : undefined
         }
-        placeholder={t`Search Creators or enter @handle`}
+        placeholder={t`Search for one Creator or enter @handle`}
         disabled={disabled}
         value={search}
         onFocus={() => setExpanded(true)}
@@ -102,7 +154,6 @@ const RecipientCombobox = ({
           setSearch(event.target.value);
           setExpanded(true);
           setActiveIndex(-1);
-          onChange(null);
         }}
         onKeyDown={(event) => {
           if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -169,21 +220,45 @@ const RecipientCombobox = ({
           </DropdownMenuItemsContainer>
         </>
       ) : null}
-    </div>
+    </>
   );
 };
 
-export const InstagramMessageRecipientInput = (
-  props: InstagramMessageRecipientInputProps,
-) => {
+export const InstagramMessageRecipientInput = ({
+  recipient,
+  confirmedHandle,
+  disabled,
+  onChange,
+}: InstagramMessageRecipientInputProps) => {
   const instanceId = useId();
   return (
     <SingleRecordPickerComponentInstanceContext.Provider value={{ instanceId }}>
-      <RecipientCombobox
-        recipient={props.recipient}
-        disabled={props.disabled}
-        onChange={props.onChange}
-      />
+      <div>
+        {recipient ? (
+          <StyledInstagramMessageFieldLabel as="div" id={`${instanceId}-label`}>
+            {t`To`}
+          </StyledInstagramMessageFieldLabel>
+        ) : (
+          <StyledInstagramMessageFieldLabel htmlFor={`${instanceId}-to`}>
+            {t`To`}
+          </StyledInstagramMessageFieldLabel>
+        )}
+        {recipient ? (
+          <RecipientTag
+            labelId={`${instanceId}-label`}
+            recipient={recipient}
+            confirmedHandle={confirmedHandle}
+            disabled={disabled}
+            onRemove={() => onChange(null)}
+          />
+        ) : (
+          <RecipientCombobox
+            id={`${instanceId}-to`}
+            disabled={disabled}
+            onChange={onChange}
+          />
+        )}
+      </div>
     </SingleRecordPickerComponentInstanceContext.Provider>
   );
 };
