@@ -201,8 +201,11 @@ export class JwtAuthStrategy extends PassportStrategy(Strategy, 'jwt') {
       ),
     );
 
+    // Resolve the member from the live workspace rather than the token: tokens
+    // minted while the workspace was still being created carry no member ID.
     return {
       ...context,
+      workspaceMemberId: workspaceMember.id,
       workspaceMember,
     };
   }
