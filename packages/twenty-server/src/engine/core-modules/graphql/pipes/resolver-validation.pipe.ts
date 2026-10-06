@@ -1,6 +1,7 @@
 import {
   type ArgumentMetadata,
   Injectable,
+  Optional,
   type PipeTransform,
   type Type,
 } from '@nestjs/common';
@@ -23,8 +24,11 @@ const safeClassValidatorValidateWrapper = async (
 
 @Injectable()
 export class ResolverValidationPipe implements PipeTransform {
+  // Optional so resolver tests can build a module without the global
+  // exception handler; the running app always provides it.
   constructor(
-    private readonly exceptionHandlerService: ExceptionHandlerService,
+    @Optional()
+    private readonly exceptionHandlerService?: ExceptionHandlerService,
   ) {}
 
   async transform(value: unknown, metadata: ArgumentMetadata) {
@@ -46,7 +50,7 @@ export class ResolverValidationPipe implements PipeTransform {
 
     // Resolver arguments come from our own app, so a rejected argument is
     // usually a client bug. BAD_USER_INPUT is otherwise never sent to Sentry.
-    this.exceptionHandlerService.captureExceptions([error]);
+    this.exceptionHandlerService?.captureExceptions([error]);
 
     throw error;
   }
