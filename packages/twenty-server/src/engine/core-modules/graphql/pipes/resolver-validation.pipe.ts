@@ -8,6 +8,7 @@ import {
 import { plainToInstance } from 'class-transformer';
 import { type ValidationError, validate } from 'class-validator';
 
+import { ExceptionHandlerService } from 'src/engine/core-modules/exception-handler/exception-handler.service';
 import { UserInputError } from 'src/engine/core-modules/graphql/utils/graphql-errors.util';
 
 const safeClassValidatorValidateWrapper = async (
@@ -22,6 +23,10 @@ const safeClassValidatorValidateWrapper = async (
 
 @Injectable()
 export class ResolverValidationPipe implements PipeTransform {
+  constructor(
+    private readonly exceptionHandlerService: ExceptionHandlerService,
+  ) {}
+
   async transform(value: unknown, metadata: ArgumentMetadata) {
     const { metatype } = metadata;
 
@@ -37,9 +42,13 @@ export class ResolverValidationPipe implements PipeTransform {
       return value;
     }
 
-    const errorMessage = this.formatErrorMessage(errors);
+    const error = new UserInputError(this.formatErrorMessage(errors));
 
-    throw new UserInputError(errorMessage);
+    // Resolver arguments come from our own app, so a rejected argument is
+    // usually a client bug. BAD_USER_INPUT is otherwise never sent to Sentry.
+    this.exceptionHandlerService.captureExceptions([error]);
+
+    throw error;
   }
 
   // oxlint-disable-next-line typescript/no-explicit-any
