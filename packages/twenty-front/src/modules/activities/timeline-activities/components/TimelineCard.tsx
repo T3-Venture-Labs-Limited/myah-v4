@@ -117,11 +117,12 @@ const CreatorTimelineCard = ({
         Date.parse(right.happensAt) - Date.parse(left.happensAt) ||
         left.id.localeCompare(right.id),
     );
-  const error = creator.error || email.error || instagram.error;
+  const error =
+    Boolean(creator.error) || Boolean(email.error) || Boolean(instagram.error);
   return (
     <TimelineCardContent
       targetRecord={targetRecord}
-      error={Boolean(error)}
+      error={error}
       retry={() => {
         void creator.refetch().catch(() => undefined);
         email.retry();
