@@ -36,7 +36,7 @@ const nav = (label: string, objectMetadataItemId: string) =>
       objectMetadataItemId,
     },
   }) as CommandMenuItemFieldsFragment;
-const mockItems = [
+const defaultItems = [
   nav('Renamed account shortcut', 'account'),
   nav('Renamed draft shortcut', 'draft'),
   nav('Go to Creators', 'creator'),
@@ -46,13 +46,20 @@ const mockItems = [
   },
 ];
 
+let mockItems: CommandMenuItemFieldsFragment[] = defaultItems;
+
+beforeEach(() => {
+  mockItems = defaultItems;
+});
+
 jest.mock('@/ui/utilities/state/jotai/hooks/useAtomStateValue', () => ({
   useAtomStateValue: (state: unknown) => {
     if (state === commandMenuItemsSelector) return mockItems;
     if (state === objectMetadataItemsWithFieldsSelector)
       return objectMetadataItems;
     if (state === currentWorkspaceState) return { featureFlags: [] };
-    if (state === currentUserWorkspaceState) return { permissionFlags: [] };
+    if (state === currentUserWorkspaceState)
+      return { permissionFlags: ['WORKSPACE_MEMBERS'] };
     if (state === currentUserState) return {};
     if (state === currentPageLayoutIdState) return null;
     if (state === isLayoutCustomizationModeEnabledState) return false;
@@ -83,6 +90,28 @@ jest.mock(
   () => ({
     CommandMenuItemEditButton: () => null,
   }),
+);
+
+it.each([true, false])(
+  'omits pinned Roles navigation but preserves Members with typename=%s (MYAH-475)',
+  (includeTypename) => {
+    mockItems = [
+      ['Renamed roles shortcut', '/settings/roles'],
+      ['Go to Members Settings', '/settings/members'],
+    ].map(([label, path]) => ({
+      ...nav(label, 'creator'),
+      conditionalAvailabilityExpression: 'permissionFlags.WORKSPACE_MEMBERS',
+      payload: includeTypename
+        ? { __typename: 'PathCommandMenuItemPayload', path }
+        : { path },
+    })) as CommandMenuItemFieldsFragment[];
+
+    render(<StandalonePageCommandMenu />);
+
+    expect(
+      screen.getAllByRole('button').map((button) => button.textContent),
+    ).toEqual(['Go to Members Settings']);
+  },
 );
 
 it('omits customized pinned Instagram record navigation from the standalone header', () => {
