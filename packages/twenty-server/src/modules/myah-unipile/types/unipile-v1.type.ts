@@ -174,6 +174,10 @@ export const hasContradictoryUnipileInstagramSenderEvidence = (
   (message.isSender === 1 && message.senderId === attendeeProviderId) ||
   (message.isSender === 0 && message.senderId === instagramUserId);
 
+export const isUnipileInstagramProviderNotice = (
+  message: Pick<UnipileInstagramMessage, 'hidden' | 'isEvent'>,
+): boolean => message.hidden || message.isEvent;
+
 export const unipileInstagramMessageDirection = (
   message: Pick<UnipileInstagramMessage, 'isSender' | 'senderId'>,
   instagramUserId: string,

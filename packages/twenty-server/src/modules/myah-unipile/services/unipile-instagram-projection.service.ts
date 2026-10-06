@@ -25,6 +25,7 @@ import {
 import { UnipileInstagramAccountFinalizationLockService } from 'src/modules/myah-unipile/services/unipile-instagram-account-finalization-lock.service';
 import {
   hasContradictoryUnipileInstagramSenderEvidence,
+  isUnipileInstagramProviderNotice,
   type UnipileInstagramChat,
   type UnipileInstagramMessage,
   unipileInstagramMessageDirection,
@@ -589,14 +590,20 @@ export class UnipileInstagramProjectionService {
 
   async upsertVerifiedMessage(
     input: UnipileInstagramMessageProjectionInput,
-  ): Promise<{
-    messageRecordId: string;
-    conversationRecordId: string;
-    wasInserted: boolean;
-    originalCreatedAt: string;
-    direction: MessageDirection;
-    deliveryState: DeliveryState;
-  }> {
+  ): Promise<
+    | {
+        messageRecordId: string;
+        conversationRecordId: string;
+        wasInserted: boolean;
+        originalCreatedAt: string;
+        direction: MessageDirection;
+        deliveryState: DeliveryState;
+      }
+    | { skipped: 'PROVIDER_NOTICE' }
+  > {
+    if (isUnipileInstagramProviderNotice(input.message)) {
+      return { skipped: 'PROVIDER_NOTICE' };
+    }
     this.assertVerifiedMessage(input);
     const direction = this.messageDirection(input);
     const requestedDeliveryState =
