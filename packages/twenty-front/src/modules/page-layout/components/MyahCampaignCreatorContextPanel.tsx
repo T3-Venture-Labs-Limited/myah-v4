@@ -6,6 +6,7 @@ import { TimelineCard } from '@/activities/timeline-activities/components/Timeli
 import { TimelineActivityContext } from '@/activities/timeline-activities/contexts/TimelineActivityContext';
 import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
+import { useUpsertRecordsInStore } from '@/object-record/record-store/hooks/useUpsertRecordsInStore';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { type ObjectRecord } from '@/object-record/types/ObjectRecord';
@@ -264,6 +265,15 @@ export const MyahCampaignCreatorContextPanel = ({
     creator?.id === creatorId
       ? creator
       : undefined;
+  // Native timeline rows render only for a Creator in the record store, which
+  // the Creator page fills but this panel otherwise would not.
+  const { upsertRecordsInStore } = useUpsertRecordsInStore();
+  useEffect(() => {
+    if (readableCreator)
+      upsertRecordsInStore({
+        partialRecords: [readableCreator],
+      });
+  }, [readableCreator, upsertRecordsInStore]);
 
   const {
     records: profiles,

@@ -6,6 +6,8 @@ import { useFindOneRecord } from '@/object-record/hooks/useFindOneRecord';
 import { useFindManyRecords } from '@/object-record/hooks/useFindManyRecords';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { useObjectPermissionsForObject } from '@/object-record/hooks/useObjectPermissionsForObject';
+import { recordStoreFamilyState } from '@/object-record/record-store/states/recordStoreFamilyState';
+import { useAtomFamilyStateValue } from '@/ui/utilities/state/jotai/hooks/useAtomFamilyStateValue';
 
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
@@ -47,7 +49,17 @@ jest.mock('@/activities/notes/components/NotesCard', () => ({
 jest.mock('@/activities/timeline-activities/components/TimelineCard', () => ({
   TimelineCard: () => {
     const { recordId } = useContext(TimelineActivityContext);
-    return <div>Native activity for {recordId}</div>;
+    // Timeline rows render only when the Creator is in the record store.
+    const recordStore = useAtomFamilyStateValue(
+      recordStoreFamilyState,
+      recordId,
+    );
+    return (
+      <div>
+        Native activity for {recordId}
+        {recordStore ? ` · rows for ${recordStore.name}` : ' · no rows'}
+      </div>
+    );
   },
 }));
 jest.mock('@/ui/layout/contexts/LayoutRenderingContext', () => ({
@@ -536,7 +548,15 @@ describe('MyahCampaignCreatorContextPanel', () => {
   it('scopes native timeline activity to the Creator rather than the enclosing campaign', () => {
     showPanel();
     fireEvent.click(screen.getByRole('tab', { name: 'Activity' }));
-    expect(screen.getByText('Native activity for creator-a')).toBeVisible();
+    expect(screen.getByText(/Native activity for creator-a/)).toBeVisible();
+  });
+
+  it('shows timeline rows without first visiting the Creator page (MYAH-468)', () => {
+    showPanel();
+    fireEvent.click(screen.getByRole('tab', { name: 'Activity' }));
+    expect(
+      screen.getByText('Native activity for creator-a · rows for Ava Rivera'),
+    ).toBeVisible();
   });
 
   it('does not expose Creator data when membership is for another campaign', () => {

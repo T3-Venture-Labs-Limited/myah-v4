@@ -246,6 +246,32 @@ it('shows why the reply agent needs help without hiding the usage reason in a to
   ).toBeVisible();
 });
 
+it('shows current usage wording for runs that failed before MYAH-463', () => {
+  mockAgentReviewQuery.mockReturnValue({
+    data: {
+      myahReplyAgentReview: {
+        needReviewCount: 1,
+        nodes: [
+          {
+            campaignCreatorId: 'membership-1',
+            creatorId: 'creator-1',
+            nextAction: 'NEEDS_YOU',
+            reason:
+              'AI credit is used up. Add credit, then Regenerate, or reply yourself.',
+          },
+        ],
+      },
+    },
+    refetch: mockAgentReviewRefetch,
+  } as never);
+  setup();
+  expect(
+    screen.getByText(
+      'Needs you · Your AI usage is used up. Review Billing, then regenerate, or reply yourself.',
+    ),
+  ).toBeVisible();
+});
+
 it('shows the agent next action and filters to influencers that need review', () => {
   mockAgentReviewQuery.mockReturnValue({
     data: {
