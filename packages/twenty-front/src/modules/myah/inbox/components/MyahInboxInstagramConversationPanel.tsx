@@ -6,6 +6,7 @@ import {
   type MyahInboxInstagramComposerProps,
 } from '@/myah/inbox/components/MyahInboxInstagramComposer';
 import { MyahInboxInstagramTimeline } from '@/myah/inbox/components/MyahInboxInstagramTimeline';
+import { MYAH_INBOX_KEYBOARD_SCROLL_REGION_FOCUS_STYLES } from '@/myah/inbox/constants/MyahInboxKeyboardScrollRegionFocusStyles';
 import { useObjectMetadataItems } from '@/object-metadata/hooks/useObjectMetadataItems';
 import { useMyahInboxCampaignAiGuidanceNavigation } from '@/myah/inbox/hooks/useMyahInboxCampaignAiGuidanceNavigation';
 import { useMyahInboxInstagramCampaignSelection } from '@/myah/inbox/hooks/useMyahInboxInstagramCampaignSelection';
@@ -44,6 +45,8 @@ const StyledMessages = styled.section`
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+
+  ${MYAH_INBOX_KEYBOARD_SCROLL_REGION_FOCUS_STYLES}
 `;
 
 const StyledLatestMessagesAction = styled.div`
@@ -71,6 +74,8 @@ const StyledReplyArea = styled.section`
   > * {
     flex-shrink: 0;
   }
+
+  ${MYAH_INBOX_KEYBOARD_SCROLL_REGION_FOCUS_STYLES}
 `;
 
 const StyledConversation = styled.section`

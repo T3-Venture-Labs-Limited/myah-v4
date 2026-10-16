@@ -19,6 +19,7 @@ import { MyahInboxContactLinkAction } from '@/myah/inbox/components/MyahInboxCon
 import { MyahInboxInstagramConversationPanel } from '@/myah/inbox/components/MyahInboxInstagramConversationPanel';
 import { MyahInboxReplyWorkspace } from '@/myah/inbox/components/MyahInboxReplyWorkspace';
 import { MyahInboxThreadActions } from '@/myah/inbox/components/MyahInboxThreadActions';
+import { MYAH_INBOX_KEYBOARD_SCROLL_REGION_FOCUS_STYLES } from '@/myah/inbox/constants/MyahInboxKeyboardScrollRegionFocusStyles';
 import type { useMyahInboxEmailHistory } from '@/myah/inbox/hooks/useMyahInboxEmailHistory';
 import type { useMyahInboxSelectedEmailThread } from '@/myah/inbox/hooks/useMyahInboxSelectedEmailThread';
 import { useOpenMyahInboxContextInSidePanel } from '@/myah/inbox/hooks/useOpenMyahInboxContextInSidePanel';
@@ -40,6 +41,8 @@ const StyledConversation = styled.section`
 
 const StyledEmailConversation = styled(StyledConversation)`
   overflow-y: auto;
+
+  ${MYAH_INBOX_KEYBOARD_SCROLL_REGION_FOCUS_STYLES}
 `;
 
 const StyledChannelPanel = styled.div`

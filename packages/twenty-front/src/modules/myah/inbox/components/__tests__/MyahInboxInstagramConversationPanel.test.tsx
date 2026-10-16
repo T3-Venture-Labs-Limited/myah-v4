@@ -129,6 +129,7 @@ jest.mock('@/myah/inbox/components/MyahInboxInstagramComposer', () => ({
 jest.mock('twenty-ui/theme-constants', () => ({
   themeCssVariables: {
     background: { transparent: { lighter: 'white' } },
+    brand: { focusRing: 'pink' },
     border: {
       color: { light: 'gray' },
       radius: { lg: '8px', md: '8px', sm: '4px' },
@@ -1087,6 +1088,36 @@ describe('MyahInboxInstagramConversationPanel', () => {
     );
     expect(source).toMatch(
       /const StyledReplyArea[^`]+`[^`]*flex-shrink: 0;[^`]*max-height: 60%;[^`]*overflow-y: auto;/,
+    );
+  });
+
+  it('gives every keyboard-scrollable conversation region the shared inset brand focus indicator', () => {
+    // MYAH-478: JSDOM neither applies Linaria CSS nor the browser's
+    // :focus-visible heuristic. The Email pane's rendered indicator is proven
+    // in the MyahInboxContactConversationFocus browser story; this pins that
+    // all three keyboard-scrollable regions reuse the same shared definition.
+    const sharedIndicator = '${MYAH_INBOX_KEYBOARD_SCROLL_REGION_FOCUS_STYLES}';
+    const instagramSource = readFileSync(
+      `${__dirname}/../MyahInboxInstagramConversationPanel.tsx`,
+      'utf8',
+    );
+    const emailSource = readFileSync(
+      `${__dirname}/../MyahInboxContactConversation.tsx`,
+      'utf8',
+    );
+    const styledBlock = (source: string, name: string) =>
+      source.match(
+        new RegExp(`const ${name} = styled[^\`]*\`([^\`]*)\`;`),
+      )?.[1];
+
+    expect(styledBlock(instagramSource, 'StyledMessages')).toContain(
+      sharedIndicator,
+    );
+    expect(styledBlock(instagramSource, 'StyledReplyArea')).toContain(
+      sharedIndicator,
+    );
+    expect(styledBlock(emailSource, 'StyledEmailConversation')).toContain(
+      sharedIndicator,
     );
   });
 
